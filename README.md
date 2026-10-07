@@ -44,10 +44,9 @@ records (exalted, dignified, neutral, undignified, or debilitated), plus the
 
 ## PostgreSQL setup
 
-The app uses PostgreSQL by default; it does not fall back to SQLite. Set
-`DATABASE_URL` in `.env` to your PostgreSQL connection string (or configure
-`PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGHOST`, and `PGPORT`), create the
-database, and then run:
+The app uses PostgreSQL by default; it does not fall back to SQLite. Configure
+`DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, and `DB_PORT` in `.env` (or set
+`DATABASE_URL` for a hosted deployment), create the database, and then run:
 
 ```text
 python manage.py migrate

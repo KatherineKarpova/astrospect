@@ -83,10 +83,13 @@ SESSION_ENGINE = "django.contrib.sessions.backends.db"
 # database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-# prefer one PostgreSQL URL for hosted environments, while PG* variables keep
-# local setup straightforward; never silently route private birth data to sqlite.
+# explicit DB_* settings support local PostgreSQL credentials, with DATABASE_URL
+# retained as a hosted-platform fallback; never silently route birth data to sqlite.
 DATABASE_URL = os.getenv("DATABASE_URL", "")
-if DATABASE_URL:
+DATABASE_VARIABLES = ("DB_NAME", "DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT")
+HAS_EXPLICIT_DB_CONFIG = any(os.getenv(key) for key in DATABASE_VARIABLES)
+
+if DATABASE_URL and not HAS_EXPLICIT_DB_CONFIG:
     import dj_database_url
 
     DATABASES = {
@@ -102,11 +105,11 @@ else:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("PGDATABASE", "astrological_introspection"),
-            "USER": os.getenv("PGUSER", "postgres"),
-            "PASSWORD": os.getenv("PGPASSWORD", ""),
-            "HOST": os.getenv("PGHOST", "127.0.0.1"),
-            "PORT": os.getenv("PGPORT", "5432"),
+            "NAME": os.getenv("DB_NAME", "astrospect_db"),
+            "USER": os.getenv("DB_USER", "astrospect_user"),
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
+            "HOST": os.getenv("DB_HOST", "localhost"),
+            "PORT": os.getenv("DB_PORT", "5432"),
             "CONN_MAX_AGE": 600,
         }
     }
