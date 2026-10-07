@@ -18,18 +18,19 @@ SOURCES = json.loads(
 )
 
 HOUSE_TOPICS = {
-    1: "self, body, and approach",
-    2: "resources, family, and speech",
-    3: "effort, skills, and siblings",
-    4: "home, roots, and foundations",
-    5: "learning, creativity, and children",
-    6: "work, service, and difficulties",
-    7: "partnerships and agreements",
-    8: "shared resources and major change",
-    9: "teachers, meaning, and long journeys",
-    10: "work, responsibility, and public role",
-    11: "friends, networks, and gains",
-    12: "rest, retreat, and letting go",
+    # concise noun phrases describe life areas without repeating house signs.
+    1: "self, body, approach",
+    2: "resources, family, speech",
+    3: "effort, skills, siblings",
+    4: "home, roots, foundations",
+    5: "learning, creativity, children",
+    6: "work, service, health",
+    7: "partnerships, agreements",
+    8: "shared resources, transformation",
+    9: "teachers, beliefs, long journeys",
+    10: "work, responsibility, public role",
+    11: "friends, networks, gains",
+    12: "rest, retreat, release",
 }
 
 PLACEMENT_SUMMARY_PROMPT = """Write a concise, personalized explanation of the supplied chart placement.
@@ -70,7 +71,9 @@ placement:
   or "other sign." Houses 1, 4, 7, and 10 are traditionally angular and more
   prominent; mention that only when supplied as angular.
 For every placement with a known house, use its exact supplied house number,
-house sign, and house topic. Without a birthplace, state that house and angle
+and briefly name its supplied life areas in a format like "whole-sign house 7:
+partnerships, agreements". Do not repeat the placement sign in parentheses
+after the house. Without a birthplace, state that house and angle
 are unavailable. Without a birthplace, the chart uses the entered time as a
 UTC approximation for planetary positions, or noon UTC if no time was given.
 Explain this limitation once only when relevant.
@@ -128,7 +131,7 @@ def _placement_summary_fallback(placement):
         ]
     if house and topic:
         sentences.append(
-            f"In whole-sign house {house}, the area of {topic}, those themes "
+            f"In whole-sign house {house}: {topic}; those themes "
             "are especially connected with that part of life."
         )
     if dignities:
@@ -170,6 +173,11 @@ def summarize_placement(chart_context, placement):
         "zodiac": chart_context.get("zodiac"),
         "house_system": chart_context.get("house_system"),
     }
+    placement_facts = {
+        key: value
+        for key, value in placement.items()
+        if key != "house_sign"
+    }
     if is_ascendant:
         target_chart_facts["whole_sign_houses"] = chart_context.get(
             "whole_sign_houses",
@@ -187,7 +195,7 @@ def summarize_placement(chart_context, placement):
                 "role": "user",
                 "content": json.dumps({
                     "chart_method": target_chart_facts,
-                    "placement": placement,
+                    "placement": placement_facts,
                     "sources": SOURCES,
                 }),
             },
@@ -328,8 +336,7 @@ def ask_chart_guide(
     }
 
     # accept only ids from your own collection.
-    # the browser will receive your verified URLs, rather than
-    # URLs that the model generated.
+    # the browser will receive verified urls rather than model-generated urls.
     if any(
         not isinstance(source_id, str)
         or source_id not in approved_sources
@@ -377,7 +384,7 @@ def build_chart_context(
         "Jupiter": {"Sagittarius", "Pisces"},
         "Saturn": {"Capricorn", "Aquarius"},
     }
-    # Traditional Jyotisha sign conditions: own sign, exaltation, and fall.
+    # traditional jyotisha sign conditions: own sign, exaltation, and fall.
     exaltations = {
         "Sun": "Aries",
         "Moon": "Taurus",

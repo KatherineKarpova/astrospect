@@ -162,7 +162,8 @@
             <section class="chat">
                 <h2>Ask the chart guide</h2>
                 <p class="section-intro">Grounded in your chart facts and traditional Jyotisha texts, adapted to this tropical chart with room for your own reflection.</p>
-                <div id="chat-log" aria-live="polite"></div>
+                <div id="chat-log" role="log" aria-live="polite"
+                    aria-relevant="additions"></div>
                 <form id="chat-form" action="{% url 'astrology:chat' %}" method="post">
                     {% csrf_token %}
                     <label for="chat-question">Your question</label>
@@ -189,11 +190,25 @@
         <script>
             const form = document.getElementById("chat-form");
             const log = document.getElementById("chat-log");
+            const questionField = document.getElementById("chat-question");
+            // textContent avoids interpreting user or model text as markup,
+            // while the role class gives each side a distinct bubble style.
+            const appendBubble = (role, content, isError = false) => {
+                const bubble = document.createElement("p");
+                bubble.className = `chat-bubble chat-bubble-${role}` +
+                    (isError ? " chat-bubble-error" : "");
+                bubble.textContent = content;
+                log.appendChild(bubble);
+                log.scrollTop = log.scrollHeight;
+            };
             form.addEventListener("submit", async (event) => {
                 event.preventDefault();
                 const button = form.querySelector("button");
+                const question = questionField.value.trim();
+                // echo the question immediately so the interface feels
+                // responsive while the model request is still in flight.
+                appendBubble("user", question);
                 button.disabled = true;
-                const entry = document.createElement("p");
                 try {
                     const response = await fetch(form.action, {
                         method: "POST",
@@ -201,21 +216,28 @@
                         headers: {"X-Requested-With": "XMLHttpRequest"}
                     });
                     const data = await response.json();
-                    entry.textContent = response.ok
-                        ? data.answer + (data.reflection ? " " + data.reflection : "")
-                        : data.error;
-                    if (response.ok) form.reset();
+                    if (!response.ok) {
+                        appendBubble("assistant", data.error, true);
+                        return;
+                    }
+                    appendBubble(
+                        "assistant",
+                        data.answer + (data.reflection ? " " + data.reflection : "")
+                    );
+                    form.reset();
                 } catch (error) {
-                    entry.textContent =
+                    appendBubble(
+                        "assistant",
                         "The chat service could not be reached. "
-                        + "Start the configured AI service and try again.";
+                        + "Start the configured AI service and try again.",
+                        true
+                    );
                 } finally {
-                    log.appendChild(entry);
                     button.disabled = false;
                 }
             });
 
-            document.getElementById("chat-question").addEventListener("keydown", (event) => {
+            questionField.addEventListener("keydown", (event) => {
                 if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
                     event.preventDefault();
                     if (form.reportValidity()) form.requestSubmit();

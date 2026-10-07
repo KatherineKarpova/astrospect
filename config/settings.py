@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
@@ -34,12 +34,13 @@ if not DEBUG and SECRET_KEY == "dev-only-change-me":
     raise RuntimeError("DJANGO_SECRET_KEY must be set when Django is running in production.")
 
 
-# Application definition
+# application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
+    'django.contrib.postgres',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
@@ -49,6 +50,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    "astrology.middleware.AnonymousUserMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -75,10 +77,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
 
-# Database
+
+# database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+# prefer one PostgreSQL URL for hosted environments, while PG* variables keep
+# local setup straightforward; never silently route private birth data to sqlite.
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 if DATABASE_URL:
     import dj_database_url
@@ -91,15 +97,22 @@ if DATABASE_URL:
         )
     }
 else:
+    # using PostgreSQL by default keeps JSONB indexes and production behavior
+    # consistent during local development, tests, and deployed operation.
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("PGDATABASE", "astrological_introspection"),
+            "USER": os.getenv("PGUSER", "postgres"),
+            "PASSWORD": os.getenv("PGPASSWORD", ""),
+            "HOST": os.getenv("PGHOST", "127.0.0.1"),
+            "PORT": os.getenv("PGPORT", "5432"),
+            "CONN_MAX_AGE": 600,
         }
     }
 
 
-# Password validation
+# password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -118,7 +131,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
+# internationalization
 # https://docs.djangoproject.com/en/6.1/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
@@ -130,14 +143,14 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
+# static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
-# Email
+# email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
 MAILERS = {
@@ -148,8 +161,8 @@ MAILERS = {
 
 # keep the credential on the server.
 # never put it in a django template or browser javascript.
-# Ollama is free to run locally and exposes an OpenAI-compatible API. A hosted
-# OpenAI-compatible endpoint can be selected with the same settings.
+# ollama is free to run locally and exposes an OpenAI-compatible API. a hosted
+# an OpenAI-compatible endpoint can be selected with the same settings.
 AI_API_KEY = os.getenv("AI_API_KEY", os.getenv("OPENAI_API_KEY", "ollama"))
 AI_BASE_URL = os.getenv("AI_BASE_URL", "http://127.0.0.1:11434/v1")
 AI_MODEL = os.getenv("AI_MODEL", os.getenv("OPENAI_MODEL", "llama3.2:3b"))

@@ -3,12 +3,18 @@ import hashlib
 import json
 
 from django.conf import settings
+from django.db import transaction
 from django.http import Http404
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from openai import APIConnectionError, APITimeoutError
-from .models import SavedChart
+from .models import (
+    BirthChart,
+    BirthChartSummary,
+    ChatMessage,
+    SavedChart,
+)
 from .forms import BirthChartForm
 from .services import (
     BirthplaceLookupError,
@@ -116,8 +122,7 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
                 'label': ANGLE_LABELS[angle['name']],
                 'house_brief': (
                     f"Whole-sign house {angle['house']} · "
-                    f"{angle['house_topic'].capitalize()} "
-                    f"({angle['house_sign']})"
+                    f"{angle['house_topic']}"
                 ),
             }
             for angle in chart_context['angles']
@@ -134,6 +139,45 @@ def active_chart(request):
             return None, None
         return saved_chart, saved_chart.chart_context
     return None, request.session.get("chart_context")
+
+
+def active_birth_chart(request):
+    # scoping the lookup to the current anonymous visitor prevents a stale or
+    # forged session value from linking another visitor's chart data.
+    birth_chart_id = request.session.get("birth_chart_id")
+    if not birth_chart_id:
+        return None
+    return BirthChart.objects.filter(
+        pk=birth_chart_id,
+        user=request.visitor,
+    ).first()
+
+
+def serialize_form_data(data):
+    # storing ISO-formatted dates and times makes every value JSON-compatible
+    # while keeping the individual submitted components easy to query in JSONB.
+    field_names = (
+        "name",
+        "birth_month",
+        "birth_day",
+        "birth_year",
+        "birth_date",
+        "birth_time",
+        "birthplace",
+        "location_id",
+        "latitude",
+        "longitude",
+        "birth_timezone",
+    )
+    serialized = {}
+    for field_name in field_names:
+        value = data.get(field_name)
+        if hasattr(value, "isoformat"):
+            value = value.isoformat()
+        if value == "":
+            value = None
+        serialized[field_name] = value
+    return serialized
 
 
 # display the birth chart form and calculate after valid submission
@@ -189,6 +233,21 @@ def chart(request):
                 chart,
                 show_houses=has_birth_time and has_birth_location,
             )
+            # persist the validated inputs beside their calculated chart so a
+            # later query can compare source data and derived placements.
+            birth_chart = BirthChart.objects.create(
+                user=request.visitor,
+                form_data=serialize_form_data(data),
+                chart_context=chart_context,
+                placements=chart_context.get("planets") or None,
+                birthplace=data.get("birthplace") or None,
+                location_id=data.get("location_id") or None,
+                latitude=data.get("latitude"),
+                longitude=data.get("longitude"),
+                birth_timezone=data.get("birth_timezone") or None,
+                has_birth_time=has_birth_time,
+            )
+            request.session["birth_chart_id"] = birth_chart.pk
             request.session.pop("saved_chart_id", None)
             request.session["chart_svg"] = chart_svg
             request.session["browser_cache_enabled"] = (
@@ -246,6 +305,7 @@ def saved_chart(request, token):
             raise Http404
     token_digest = hashlib.sha256(token.encode("ascii")).hexdigest()
     chart = get_object_or_404(SavedChart, token_digest=token_digest)
+    request.session.pop("birth_chart_id", None)
     request.session["saved_chart_id"] = chart.pk
     response = render(
             request,
@@ -281,6 +341,7 @@ def delete_saved_chart(request, token):
     chart = get_object_or_404(SavedChart, token_digest=token_digest)
     if request.session.get("saved_chart_id") == chart.pk:
         request.session.pop("saved_chart_id", None)
+        request.session.pop("birth_chart_id", None)
         request.session.pop("chart_context", None)
         request.session.pop("placement_summaries", None)
         request.session.pop("placement_summary_version", None)
@@ -300,7 +361,23 @@ def chat(request):
     if not question or len(question) > 2000:
         return JsonResponse({"error": "Enter a question of 1–2000 characters."}, status=400)
 
-    history = request.session.get("chat_history", [])
+    birth_chart = active_birth_chart(request)
+    # fetch only the two prompt fields and cap the database work to the recent
+    # context window; reversing restores chronological order for the model.
+    stored_history = list(
+        ChatMessage.objects.filter(
+            user=request.visitor,
+            birth_chart=birth_chart,
+        ).order_by("-created_at", "-pk").values_list("role", "content")[:16]
+    )
+    history = (
+        [
+            {"role": role, "content": content}
+            for role, content in reversed(stored_history)
+        ]
+        if stored_history
+        else request.session.get("chat_history", [])
+    )
     try:
         reply = ask_chart_guide(
             chart_context,
@@ -323,11 +400,21 @@ def chat(request):
             status=503,
         )
 
-    history.extend([
-        {"role": "user", "content": question},
-        {"role": "assistant", "content": reply["answer"]},
-    ])
-    request.session["chat_history"] = history[-16:]
+    # saving both sides atomically avoids a conversation that appears to have
+    # a user question with no corresponding assistant response.
+    with transaction.atomic():
+        ChatMessage.objects.create(
+            user=request.visitor,
+            birth_chart=birth_chart,
+            role=ChatMessage.Role.USER,
+            content=question,
+        )
+        ChatMessage.objects.create(
+            user=request.visitor,
+            birth_chart=birth_chart,
+            role=ChatMessage.Role.ASSISTANT,
+            content=reply["answer"],
+        )
     return JsonResponse(reply)
 
 
@@ -351,6 +438,19 @@ def placement_summary(request):
     placement = placements.get(placement_key)
     if placement is None:
         return JsonResponse({"error": "That chart placement is not available."}, status=400)
+
+    birth_chart = active_birth_chart(request)
+    if birth_chart:
+        # the chart/placement/version lookup uses the chart's unique placement
+        # index, avoiding another model call for previously generated output.
+        stored_summary = BirthChartSummary.objects.filter(
+            user=request.visitor,
+            birth_chart=birth_chart,
+            placement_key=placement_key,
+            version=PLACEMENT_SUMMARY_VERSION,
+        ).first()
+        if stored_summary:
+            return JsonResponse(stored_summary.summary_data)
 
     if saved_chart:
         if saved_chart.placement_summary_version != PLACEMENT_SUMMARY_VERSION:
@@ -386,10 +486,31 @@ def placement_summary(request):
         )
 
     summary_cache[placement_key] = result
+    summary_values = {
+        "user": request.visitor,
+        "birth_chart": birth_chart,
+        "placement_key": placement_key,
+        "summary_data": result,
+        "version": PLACEMENT_SUMMARY_VERSION,
+    }
+    if birth_chart:
+        BirthChartSummary.objects.update_or_create(
+            user=request.visitor,
+            birth_chart=birth_chart,
+            placement_key=placement_key,
+            defaults={
+                "summary_data": result,
+                "version": PLACEMENT_SUMMARY_VERSION,
+            },
+        )
+    else:
+        BirthChartSummary.objects.create(**summary_values)
     if saved_chart:
         saved_chart.placement_summaries = summary_cache
         saved_chart.save(update_fields=["placement_summaries"])
-    else:
+    elif not birth_chart:
+        # only legacy session-only charts need the old cache; new chart records
+        # already have a durable, indexed summary row in PostgreSQL.
         request.session["placement_summaries"] = summary_cache
     return JsonResponse(result)
     

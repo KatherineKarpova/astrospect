@@ -8,7 +8,18 @@ from django.test import TestCase
 
 from astrology.chatbot import SOURCES, build_chart_context, summarize_placement
 from astrology.forms import BirthChartForm
-from astrology.models import SavedChart
+from astrology.models import (
+    BirthChart,
+    BirthChartSummary,
+    ChatMessage,
+    House,
+    Planet,
+    PlanetSignDignity,
+    PlanetaryRulership,
+    SavedChart,
+    User,
+    ZodiacSign,
+)
 from astrology.services import (
     BirthplaceLookupError,
     calculate_birth_chart,
@@ -117,6 +128,20 @@ class PlacementSummaryViewTests(TestCase):
         generate.assert_called_once()
         chart.refresh_from_db()
         self.assertEqual(chart.placement_summaries["sun"], result)
+
+    def test_generated_summary_is_saved_as_json_for_anonymous_user(self):
+        result = {"summary": "Persisted summary.", "sources": []}
+        with patch("astrology.views.summarize_placement", return_value=result):
+            response = self.client.post(
+                "/placement-summary/",
+                {"placement": "sun"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        visitor = User.objects.get(session_key=self.client.session.session_key)
+        summary = BirthChartSummary.objects.get(user=visitor, placement_key="sun")
+        self.assertEqual(summary.summary_data, result)
+        self.assertIsNone(summary.birth_chart_id)
 
     def test_private_link_can_delete_its_saved_chart(self):
         token = secrets.token_urlsafe(32)
@@ -306,6 +331,7 @@ class TraditionalChartContextTests(TestCase):
         self.assertIn('"Gemini"', supplied_facts)
         self.assertIn('"house": 7', supplied_facts)
         self.assertIn("partnerships and agreements", supplied_facts)
+        self.assertNotIn('"house_sign"', supplied_facts)
         self.assertIn('"essential_dignity": []', supplied_facts)
         self.assertEqual(
             result["summary"],
@@ -369,7 +395,11 @@ class TraditionalChartContextTests(TestCase):
                 },
             )
         self.assertIn("Venus in Taurus", result["summary"])
-        self.assertIn("whole-sign house 7", result["summary"])
+        self.assertIn(
+            "whole-sign house 7: partnerships and agreements",
+            result["summary"],
+        )
+        self.assertNotIn("(Gemini)", result["summary"])
         self.assertNotIn("Ascendant", result["summary"])
 
     def test_house_labels_follow_the_wheel_and_colors_follow_elements(self):
@@ -405,6 +435,92 @@ class TraditionalChartContextTests(TestCase):
 
 
 class ChartPagePlacementTests(TestCase):
+    def test_anonymous_browser_identity_survives_a_new_session(self):
+        first_response = self.client.get("/")
+        browser_cookie = first_response.cookies["astrology_browser"].value
+        visitor = User.objects.get(
+            session_key=self.client.session.session_key,
+        )
+
+        self.client.cookies.pop("sessionid")
+        self.client.get("/")
+
+        self.assertEqual(User.objects.count(), 1)
+        visitor.refresh_from_db()
+        self.assertEqual(visitor.browser_token_digest, hashlib.sha256(
+            browser_cookie.encode("ascii")
+        ).hexdigest())
+        self.assertEqual(visitor.session_key, self.client.session.session_key)
+
+    def test_zodiac_reference_data_is_seeded(self):
+        self.assertEqual(ZodiacSign.objects.count(), 12)
+        self.assertEqual(Planet.objects.count(), 7)
+        self.assertEqual(PlanetaryRulership.objects.count(), 12)
+        self.assertEqual(PlanetSignDignity.objects.count(), 84)
+        self.assertEqual(House.objects.count(), 12)
+        self.assertEqual(
+            House.objects.get(number=7).representations,
+            ["partnerships", "agreements"],
+        )
+        self.assertEqual(
+            PlanetSignDignity.objects.get(
+                planet__name="Sun",
+                sign__name="Aries",
+            ).condition,
+            PlanetSignDignity.Condition.EXALTED,
+        )
+        self.assertEqual(
+            PlanetSignDignity.objects.get(
+                planet__name="Sun",
+                sign__name="Aquarius",
+            ).condition,
+            PlanetSignDignity.Condition.UNDIGNIFIED,
+        )
+
+    def test_chat_messages_are_persisted_for_anonymous_user(self):
+        session = self.client.session
+        session["chart_context"] = {
+            "zodiac": "tropical",
+            "house_system": "whole_sign",
+            "planets": [],
+            "angles": [],
+        }
+        session.save()
+
+        histories = []
+
+        def answer(_chart, _question, history, _level, _tone):
+            histories.append(list(history))
+            return {"answer": "A chart-based response."}
+
+        with patch("astrology.views.ask_chart_guide", side_effect=answer):
+            self.assertEqual(
+                self.client.post("/chat/", {"question": "What stands out?"}).status_code,
+                200,
+            )
+            self.client.post("/chat/", {"question": "And next?"})
+
+        visitor = User.objects.get(session_key=self.client.session.session_key)
+        messages = list(
+            ChatMessage.objects.filter(user=visitor).order_by("created_at", "pk")
+        )
+        self.assertEqual(
+            [(message.role, message.content) for message in messages],
+            [
+                (ChatMessage.Role.USER, "What stands out?"),
+                (ChatMessage.Role.ASSISTANT, "A chart-based response."),
+                (ChatMessage.Role.USER, "And next?"),
+                (ChatMessage.Role.ASSISTANT, "A chart-based response."),
+            ],
+        )
+        self.assertEqual(
+            histories[1],
+            [
+                {"role": "user", "content": "What stands out?"},
+                {"role": "assistant", "content": "A chart-based response."},
+            ],
+        )
+
     def test_birthplace_is_optional_but_partial_selection_is_explained(self):
         form = BirthChartForm(data={
             "birth_month": "9",
@@ -436,6 +552,41 @@ class ChartPagePlacementTests(TestCase):
             "Choose a suggestion",
             str(partial_form.non_field_errors()),
         )
+
+    def test_birth_date_fields_render_in_a_single_horizontal_row(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="date-fields"')
+        self.assertContains(response, 'class="date-field"', count=3)
+
+    def test_chat_interface_has_distinct_message_bubble_layout(self):
+        context = {"birth_location_known": False, "planets": [], "angles": []}
+        with (
+            patch("astrology.views.calculate_daily_sign_changes", return_value={}),
+            patch("astrology.views.calculate_birth_chart", return_value=object()),
+            patch("astrology.views.build_chart_context", return_value=context),
+            patch("astrology.views.generate_chart_svg", return_value="<svg></svg>"),
+        ):
+            response = self.client.post(
+                "/chart/",
+                {
+                    "birth_month": "9",
+                    "birth_day": "22",
+                    "birth_year": "1997",
+                    "birthplace": "",
+                    "location_id": "",
+                    "latitude": "",
+                    "longitude": "",
+                    "birth_timezone": "",
+                    "birth_time": "",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'role="log"')
+        self.assertContains(response, "chat-bubble-${role}")
+        self.assertContains(response, 'appendBubble("user", question)')
 
     def test_birthplace_text_without_suggestion_is_valid_for_server_lookup(self):
         form = BirthChartForm(data={
@@ -559,6 +710,12 @@ class ChartPagePlacementTests(TestCase):
             self.client.session["chart_context"]["daily_sign_changes"]["Moon"],
             ["Gemini", "Cancer"],
         )
+        saved_chart = BirthChart.objects.get(user__session_key=self.client.session.session_key)
+        self.assertEqual(saved_chart.form_data["birth_time"], "13:05:00")
+        self.assertIsNone(saved_chart.form_data["birthplace"])
+        self.assertIsNone(saved_chart.birthplace)
+        self.assertIsNone(saved_chart.latitude)
+        self.assertIsNone(saved_chart.placements)
         self.assertTrue(build_context.call_args.args[1])
         self.assertContains(response, "Birth time received: 13:05")
         self.assertContains(response, "UTC approximation")

@@ -162,13 +162,30 @@ a:focus-visible {
 }
 
 fieldset {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0 0.8rem;
     margin: 0 0 1.3rem;
     padding: 1rem;
     border: 1px solid var(--line);
     border-radius: 0.75rem;
+}
+
+/* keep the three birth-date inputs aligned without coupling labels to controls */
+.date-fields {
+    display: grid;
+    grid-template-columns: 1.15fr 0.75fr 1fr;
+    gap: 0.65rem;
+}
+
+.date-field {
+    min-width: 0;
+}
+
+.date-field label {
+    display: block;
+}
+
+.date-field select,
+.date-field input {
+    min-width: 0;
 }
 
 fieldset legend {
@@ -479,16 +496,40 @@ button:disabled {
 
 #chat-log {
     display: grid;
-    gap: 0.6rem;
+    gap: 0.75rem;
+    max-height: 28rem;
+    overflow-y: auto;
+    padding: 0.25rem 0.1rem 0.75rem;
 }
 
-#chat-log p {
-    margin: 0.4rem 0;
+/* constrain each message and align it by speaker to create a familiar dm flow */
+#chat-log .chat-bubble {
+    width: fit-content;
+    max-width: min(82%, 38rem);
+    margin: 0;
     padding: 0.85rem 1rem;
-    border-radius: 0.75rem;
-    background: var(--surface-muted);
+    border-radius: 1rem;
     color: var(--ink);
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+#chat-log .chat-bubble-user {
+    justify-self: end;
+    border-bottom-right-radius: 0.25rem;
+    background: var(--taupe-dark);
+    color: var(--surface);
+}
+
+#chat-log .chat-bubble-assistant {
+    justify-self: start;
+    border-bottom-left-radius: 0.25rem;
+    background: var(--surface-muted);
+}
+
+#chat-log .chat-bubble-error {
+    border: 1px solid #c7a99d;
+    background: #f7eeea;
 }
 
 .chat textarea {
@@ -565,8 +606,10 @@ button:disabled {
         width: min(100% - 1.1rem, 1080px);
     }
 
-    fieldset {
-        grid-template-columns: 1fr;
+    .date-field select,
+    .date-field input {
+        padding-right: 0.35rem;
+        padding-left: 0.35rem;
     }
 
     .chat-actions {
