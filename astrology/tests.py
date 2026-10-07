@@ -6,7 +6,11 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
-from astrology.chatbot import SOURCES, build_chart_context, summarize_placement
+from astrology.chatbot import (
+    build_chart_context,
+    sources_for_chart_context,
+    summarize_placement,
+)
 from astrology.forms import BirthChartForm
 from astrology.models import (
     BirthChart,
@@ -301,7 +305,88 @@ class TraditionalChartContextTests(TestCase):
         self.assertEqual(planets["Saturn"]["essential_dignity"], ["debilitated"])
 
     def test_only_approved_jyotisha_source_is_available_to_summaries(self):
-        self.assertEqual([source["id"] for source in SOURCES], ["BPHS"])
+        self.assertEqual(
+            [source["id"] for source in sources_for_chart_context({
+                "zodiac": "tropical",
+                "house_system": "whole_sign",
+            })],
+            ["BPHS"],
+        )
+        self.assertEqual(
+            [source["id"] for source in sources_for_chart_context({
+                "zodiac": "sidereal",
+                "house_system": "placidus",
+            })],
+            ["BPHS", "SWEPH"],
+        )
+
+    def test_chart_calculation_uses_the_selected_sidereal_and_house_methods(self):
+        with patch("astrology.services.AstrologicalSubject") as subject_factory:
+            calculate_birth_chart(
+                {
+                    "name": "Test",
+                    "birth_date": date(1997, 9, 22),
+                    "birth_time": time(13, 5),
+                    "has_birth_location": True,
+                    "latitude": 25.7,
+                    "longitude": -80.2,
+                    "house_system": "placidus",
+                    "zodiac_system": "sidereal",
+                    "ayanamsa": "lahiri",
+                },
+                "America/New_York",
+            )
+
+        kwargs = subject_factory.call_args.kwargs
+        self.assertEqual(kwargs["zodiac_type"], "Sidereal")
+        self.assertEqual(kwargs["sidereal_mode"], "LAHIRI")
+        self.assertEqual(kwargs["houses_system_identifier"], "P")
+
+    def test_placidus_context_uses_engine_house_numbers_without_whole_sign_sequence(self):
+        chart = SimpleNamespace(**{
+            name.lower(): SimpleNamespace(
+                sign_num=index % 12,
+                position=12.5,
+                retrograde=False,
+                house="Ninth_House",
+            )
+            for index, name in enumerate(
+                ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn")
+            )
+        })
+        for name, sign_num, house in (
+            ("ascendant", 0, "First_House"),
+            ("descendant", 6, "Seventh_House"),
+            ("medium_coeli", 9, "Tenth_House"),
+            ("imum_coeli", 3, "Fourth_House"),
+        ):
+            setattr(
+                chart,
+                name,
+                SimpleNamespace(
+                    sign_num=sign_num,
+                    position=12.5,
+                    house=house,
+                ),
+            )
+
+        context = build_chart_context(
+            chart,
+            has_birth_time=True,
+            has_birth_location=True,
+            zodiac_system="sidereal",
+            house_system="placidus",
+            ayanamsa="lahiri",
+        )
+
+        self.assertEqual(context["zodiac"], "sidereal")
+        self.assertEqual(context["house_system"], "placidus")
+        self.assertEqual(context["ayanamsa"], "lahiri")
+        self.assertEqual(context["planets"][0]["house"], 9)
+        self.assertIsNone(context["planets"][0]["house_sign"])
+        self.assertEqual(context["angles"][2]["house"], 10)
+        self.assertEqual(context["whole_sign_houses"], [])
+
 
     def test_planet_summary_receives_planet_sign_house_topic_and_condition(self):
         client = MagicMock()
@@ -333,6 +418,9 @@ class TraditionalChartContextTests(TestCase):
         self.assertIn("partnerships and agreements", supplied_facts)
         self.assertNotIn('"house_sign"', supplied_facts)
         self.assertIn('"essential_dignity": []', supplied_facts)
+        prompt = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+        self.assertIn("Do not repeat the house number", prompt)
+        self.assertIn("descriptor in the summary", prompt)
         self.assertEqual(
             result["summary"],
             'Moon in Gemini brings "quick" reflection into close partnerships.',
@@ -395,10 +483,8 @@ class TraditionalChartContextTests(TestCase):
                 },
             )
         self.assertIn("Venus in Taurus", result["summary"])
-        self.assertIn(
-            "whole-sign house 7: partnerships and agreements",
-            result["summary"],
-        )
+        self.assertNotIn("whole-sign house 7", result["summary"])
+        self.assertNotIn("partnerships and agreements", result["summary"])
         self.assertNotIn("(Gemini)", result["summary"])
         self.assertNotIn("Ascendant", result["summary"])
 
@@ -535,6 +621,19 @@ class ChartPagePlacementTests(TestCase):
         })
         self.assertTrue(form.is_valid(), form.errors)
         self.assertFalse(form.cleaned_data["has_birth_location"])
+        self.assertEqual(form.cleaned_data["house_system"], "whole_sign")
+        self.assertEqual(form.cleaned_data["zodiac_system"], "tropical")
+        self.assertIsNone(form.cleaned_data["ayanamsa"])
+
+        sidereal_form = BirthChartForm(data={
+            "birth_month": "9",
+            "birth_day": "22",
+            "birth_year": "1997",
+            "zodiac_system": "sidereal",
+            "house_system": "placidus",
+        })
+        self.assertTrue(sidereal_form.is_valid(), sidereal_form.errors)
+        self.assertEqual(sidereal_form.cleaned_data["ayanamsa"], "lahiri")
 
         partial_form = BirthChartForm(data={
             "birth_month": "9",
@@ -559,6 +658,10 @@ class ChartPagePlacementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'class="date-fields"')
         self.assertContains(response, 'class="date-field"', count=3)
+        self.assertContains(response, '<option value="tropical"')
+        self.assertContains(response, '<option value="whole_sign"')
+        self.assertContains(response, 'value="sidereal"')
+        self.assertContains(response, 'value="placidus"')
 
     def test_chat_interface_has_distinct_message_bubble_layout(self):
         context = {"birth_location_known": False, "planets": [], "angles": []}
@@ -587,6 +690,15 @@ class ChartPagePlacementTests(TestCase):
         self.assertContains(response, 'role="log"')
         self.assertContains(response, "chat-bubble-${role}")
         self.assertContains(response, 'appendBubble("user", question)')
+        script = response.content.decode()
+        self.assertLess(
+            script.index("const formData = new FormData(form);"),
+            script.index("questionField.value = \"\";"),
+        )
+        self.assertLess(
+            script.index("appendBubble(\"user\", question);"),
+            script.index("questionField.value = \"\";"),
+        )
 
     def test_birthplace_text_without_suggestion_is_valid_for_server_lookup(self):
         form = BirthChartForm(data={
@@ -700,6 +812,9 @@ class ChartPagePlacementTests(TestCase):
             True,
             False,
             {"Moon": ["Gemini", "Cancer"]},
+            zodiac_system="tropical",
+            house_system="whole_sign",
+            ayanamsa=None,
         )
         render_svg.assert_called_once_with(
             calculate_chart.return_value,
@@ -712,6 +827,9 @@ class ChartPagePlacementTests(TestCase):
         )
         saved_chart = BirthChart.objects.get(user__session_key=self.client.session.session_key)
         self.assertEqual(saved_chart.form_data["birth_time"], "13:05:00")
+        self.assertEqual(saved_chart.house_system, "whole_sign")
+        self.assertEqual(saved_chart.zodiac_system, "tropical")
+        self.assertIsNone(saved_chart.ayanamsa)
         self.assertIsNone(saved_chart.form_data["birthplace"])
         self.assertIsNone(saved_chart.birthplace)
         self.assertIsNone(saved_chart.latitude)
@@ -744,6 +862,9 @@ class ChartPagePlacementTests(TestCase):
     @patch(
         "astrology.views.build_chart_context",
         return_value={
+            "zodiac": "sidereal",
+            "house_system": "placidus",
+            "ayanamsa": "lahiri",
             "planets": [
                 {
                     "name": "Sun",
@@ -779,6 +900,8 @@ class ChartPagePlacementTests(TestCase):
                 "longitude": "-80.193",
                 "birth_timezone": "America/New_York",
                 "birth_time": "13:05",
+                "zodiac_system": "sidereal",
+                "house_system": "placidus",
             },
             follow=True,
         )
@@ -786,15 +909,29 @@ class ChartPagePlacementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Sun in Virgo")
         self.assertContains(response, "House 10")
+        self.assertContains(response, "work, responsibility, and public role")
         self.assertContains(response, "Exalted")
         self.assertContains(response, "1st House")
+        self.assertContains(response, "Sidereal (Lahiri/Chitrapaksha)")
+        self.assertContains(response, "Placidus")
         self.assertContains(response, "Birth time received: 13:05")
         calculate_chart.assert_called_once()
+        self.assertEqual(calculate_chart.call_args.args[0]["zodiac_system"], "sidereal")
+        self.assertEqual(calculate_chart.call_args.args[0]["house_system"], "placidus")
         build_context.assert_called_once()
+        self.assertEqual(build_context.call_args.kwargs["zodiac_system"], "sidereal")
+        self.assertEqual(build_context.call_args.kwargs["house_system"], "placidus")
         render_svg.assert_called_once()
         self.assertNotIn("saved_chart_id", self.client.session)
-        self.assertContains(response, "Traditional source:")
+        self.assertContains(response, "Sources and method references:")
+        self.assertContains(response, "Swiss Ephemeris")
         self.assertNotContains(response, "Copy private link")
+        saved_chart = BirthChart.objects.get(
+            user__session_key=self.client.session.session_key,
+        )
+        self.assertEqual(saved_chart.house_system, "placidus")
+        self.assertEqual(saved_chart.zodiac_system, "sidereal")
+        self.assertEqual(saved_chart.ayanamsa, "lahiri")
 
     @patch("astrology.views.generate_chart_svg", return_value="<svg>chart</svg>")
     @patch(

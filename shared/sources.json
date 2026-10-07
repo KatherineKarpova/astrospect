@@ -4,6 +4,13 @@
     "title": "Brihat Parashara Hora Shastra",
     "url": "https://archive.org/details/brihat-parashara-hora-shastra",
     "scope": "Traditional Jyotisha teachings on the ascendant (lagna), signs, planets, houses, and their interpretations.",
-    "note": "The app calculates tropical placements. This is a modern tropical adaptation using traditional Jyotisha concepts, not a claim that this text prescribed the tropical zodiac."
+    "note": "For tropical charts, applying these teachings is a modern adaptation, not a claim that this text prescribed the tropical zodiac."
+  },
+  {
+    "id": "SWEPH",
+    "title": "Swiss Ephemeris Programmer's Manual",
+    "url": "https://www.astro.com/swisseph/swephprg.htm",
+    "scope": "Technical documentation for astronomical position calculations, sidereal ayanamshas, and house-system computation; not a source for astrological interpretation.",
+    "note": "This source documents calculation methods only. It does not validate astrology as science or replace traditional interpretive texts."
   }
 ]

@@ -24,9 +24,9 @@ from .services import (
     resolve_birthplace,
 )
 from .chatbot import (
-    SOURCES,
     build_chart_context,
     ask_chart_guide,
+    sources_for_chart_context,
     summarize_placement,
 )
 
@@ -47,7 +47,7 @@ ANGLE_LABELS = {
     "Imum_Coeli": "IC · Imum Coeli",
 }
 
-PLACEMENT_SUMMARY_VERSION = 7
+PLACEMENT_SUMMARY_VERSION = 8
 
 
 def chart_display_context(chart_context, chart_svg, has_birth_time):
@@ -61,6 +61,17 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
         'has_birth_time': has_birth_time,
         'has_birth_location': has_birth_location,
         'has_house_data': has_house_data,
+        'zodiac_label': (
+            "Sidereal (Lahiri/Chitrapaksha)"
+            if chart_context.get("zodiac") == "sidereal"
+            else "Tropical"
+        ),
+        'house_system_label': (
+            "Placidus"
+            if chart_context.get("house_system") == "placidus"
+            else "Whole sign"
+        ),
+        'method_sources': sources_for_chart_context(chart_context),
         'birth_time_note': (
             (
                 f"Birth time received: {chart_context['birth_time_display']} "
@@ -88,7 +99,7 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
             else ""
         ),
         'daily_sign_change_note': (
-            "A planet marked below changed tropical signs during this UTC "
+            f"A planet marked below changed {chart_context.get('zodiac', 'tropical')} signs during this UTC "
             "calendar date. Without a birthplace and time zone, its exact "
             "birth sign cannot be confirmed."
             if chart_context.get("daily_sign_changes")
@@ -101,7 +112,10 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
                 'key': planet['name'].lower(),
                 'symbol': PLANET_SYMBOLS[planet['name']],
                 'house_brief': (
-                    f"House {planet['house']}"
+                    (
+                        f"{'Placidus' if chart_context.get('house_system') == 'placidus' else 'Whole-sign'} "
+                        f"house {planet['house']} · {planet['house_topic']}"
+                    )
                     if planet['house']
                     else ""
                 ),
@@ -121,8 +135,12 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
                 'key': angle['name'].lower(),
                 'label': ANGLE_LABELS[angle['name']],
                 'house_brief': (
-                    f"Whole-sign house {angle['house']} · "
-                    f"{angle['house_topic']}"
+                    (
+                        f"{'Placidus' if chart_context.get('house_system') == 'placidus' else 'Whole-sign'} "
+                        f"house {angle['house']} · {angle['house_topic']}"
+                    )
+                    if angle.get("house")
+                    else ""
                 ),
             }
             for angle in chart_context['angles']
@@ -168,6 +186,9 @@ def serialize_form_data(data):
         "latitude",
         "longitude",
         "birth_timezone",
+        "house_system",
+        "zodiac_system",
+        "ayanamsa",
     )
     serialized = {}
     for field_name in field_names:
@@ -182,8 +203,8 @@ def serialize_form_data(data):
 
 # display the birth chart form and calculate after valid submission
 def index(request):
-    
     return render(request, 'astrology/index.html',{
+        'form': BirthChartForm(),
         'geoapify_api_key': settings.GEOAPIFY_API_KEY,
         })
 
@@ -223,6 +244,9 @@ def chart(request):
                 has_birth_time,
                 has_birth_location,
                 daily_sign_changes,
+                zodiac_system=data["zodiac_system"],
+                house_system=data["house_system"],
+                ayanamsa=data["ayanamsa"],
             )
             if data["birth_time"]:
                 chart_context["birth_time_display"] = data["birth_time"].strftime(
@@ -246,6 +270,9 @@ def chart(request):
                 longitude=data.get("longitude"),
                 birth_timezone=data.get("birth_timezone") or None,
                 has_birth_time=has_birth_time,
+                house_system=data["house_system"],
+                zodiac_system=data["zodiac_system"],
+                ayanamsa=data["ayanamsa"],
             )
             request.session["birth_chart_id"] = birth_chart.pk
             request.session.pop("saved_chart_id", None)
@@ -275,7 +302,6 @@ def chart(request):
                             separators=(",", ":"),
                         ).encode("utf-8")
                     ).hexdigest(),
-                    "source": SOURCES[0],
                 },
             )
             response["Cache-Control"] = "private, no-store"
@@ -323,7 +349,6 @@ def saved_chart(request, token):
                         separators=(",", ":"),
                     ).encode("utf-8")
                 ).hexdigest(),
-                "source": SOURCES[0],
             },
     )
     response["Cache-Control"] = "private, no-store"

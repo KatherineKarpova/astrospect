@@ -5,7 +5,7 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" href="https://unpkg.com/@geoapify/geocoder-autocomplete@3/styles/minimal.css">
-        <link rel="stylesheet" href="{% static 'astrology/style.css' %}">
+        <link rel="stylesheet" href="{% static 'astrology/style.css' %}?v=20261007-chat-colors">
         <title>Astrological Instrospection</title>
     </head>
     <body class="site-shell">
@@ -92,6 +92,34 @@
                 <p id="birth-time-help">
                     With a selected birthplace, this is interpreted as local time. Without one, it is treated as a UTC approximation for planetary positions only; houses and angles are omitted.
                 </p>
+                <fieldset class="chart-method-fields">
+                    <legend>Chart methods</legend>
+                    <label for="zodiac-system">Zodiac</label>
+                    <select id="zodiac-system" name="zodiac_system">
+                        <option value="tropical"
+                            {% if form.zodiac_system.value == "tropical" or not form.zodiac_system.value %}selected{% endif %}>
+                            Tropical
+                        </option>
+                        <option value="sidereal"
+                            {% if form.zodiac_system.value == "sidereal" %}selected{% endif %}>
+                            Sidereal (Lahiri/Chitrapaksha)
+                        </option>
+                    </select>
+                    <p class="field-hint">Sidereal uses Lahiri/Chitrapaksha ayanamsa. Only the selected zodiac is used for planetary signs.</p>
+                    <label for="house-system">House system</label>
+                    <select id="house-system" name="house_system">
+                        <option value="whole_sign"
+                            {% if form.house_system.value == "whole_sign" or not form.house_system.value %}selected{% endif %}>
+                            Whole sign (default)
+                        </option>
+                        <option value="placidus"
+                            {% if form.house_system.value == "placidus" %}selected{% endif %}>
+                            Placidus
+                        </option>
+                    </select>
+                    <p class="field-hint">Only the selected house system determines house placements. Houses require a birth time and birthplace.</p>
+                    <p class="field-hint">Calculation reference: <a href="https://www.astro.com/swisseph/swephprg.htm" target="_blank" rel="noopener noreferrer">Swiss Ephemeris Programmer's Manual</a>. It documents calculation methods, not interpretive claims.</p>
+                </fieldset>
                 <label class="browser-cache-option" for="save-to-browser">
                     <input type="checkbox" id="save-to-browser" name="save_to_browser">
                     Save my chart details in this browser
@@ -150,7 +178,8 @@
                     for (const field of [
                         "name", "birth_month", "birth_day", "birth_year",
                         "birth_time", "birthplace", "location_id", "latitude",
-                        "longitude", "birth_timezone"
+                        "longitude", "birth_timezone", "house_system",
+                        "zodiac_system"
                     ]) {
                         details[field] = data.get(field) || "";
                     }

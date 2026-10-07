@@ -1,16 +1,23 @@
 # Astrological Introspection
 
-This Django app calculates **tropical zodiac, whole-sign houses** and offers a
-source-grounded chat guide using approved traditional Jyotisha texts only. It
-intentionally does not mix in sidereal recalculations, nakshatras, or dashas.
+This Django app defaults to **tropical zodiac and whole-sign houses** and
+offers a source-grounded chat guide using approved traditional Jyotisha texts.
+The birth chart form also allows **sidereal zodiac with Lahiri/Chitrapaksha
+ayanamsa** and **Placidus houses**. Calculations and interpretations use only
+the methods selected for that chart; they do not mix zodiac or house systems.
+The Swiss Ephemeris manual is linked for technical calculation conventions,
+not as an interpretive authority.
+
 Traditional Jyotisha texts do not establish that ancient authors prescribed
-tropical astrology; the app applies Jyotisha concepts to tropical placements
-as a clearly labeled modern adaptation.
+tropical astrology; applying Jyotisha concepts to tropical placements is
+therefore labeled as a modern adaptation. Sidereal charts use the selected
+Lahiri/Chitrapaksha ayanamsa.
 
 On the chart page, select a planet or (when birthplace and birth time are
 known) an angle to expand an AI-written plain-language summary. The approved
-traditional source is listed once at the bottom of the chart page. In the
-question box, Enter sends the message and Shift+Enter inserts a new line.
+sources and selected calculation methods are listed at the bottom of the chart
+page. In the question box, Enter sends the message and Shift+Enter inserts a
+new line.
 
 Birth time without a selected birthplace is used as a UTC approximation for
 planetary positions only. Houses and angles require both a birthplace and a
@@ -37,7 +44,7 @@ browser profile can access it. Use **Clear saved chart from this browser** on
 the chart page (or clear the site data in the browser) to remove the local
 copy. Existing private links created by an earlier version remain available.
 
-The database also includes the 12 tropical zodiac signs, the app's seven
+The database also includes the 12 zodiac signs, the app's seven
 traditional planets, their classical sign rulerships, and sign-condition
 records (exalted, dignified, neutral, undignified, or debilitated), plus the
 12 houses and their brief life-area descriptions.

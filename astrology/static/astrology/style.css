@@ -7,6 +7,8 @@
     --ink-soft: #625f59;
     --taupe: #857b6e;
     --taupe-dark: #655d53;
+    --chat-user: #766f65;
+    --chat-assistant: #f5f0e6;
     --line: #d9d4cb;
     --focus: #766a5b;
     --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
@@ -186,6 +188,19 @@ fieldset {
 .date-field select,
 .date-field input {
     min-width: 0;
+}
+
+.chart-method-fields label {
+    display: block;
+}
+
+.chart-method-fields .field-hint {
+    margin: -0.5rem 0 0.9rem;
+}
+
+.chart-method-fields a,
+.source-note a {
+    color: var(--taupe-dark);
 }
 
 fieldset legend {
@@ -433,6 +448,7 @@ button:disabled {
 .placement-brief {
     color: var(--taupe-dark);
     font-size: 0.82rem;
+    font-weight: 650;
     line-height: 1.4;
 }
 
@@ -517,14 +533,14 @@ button:disabled {
 #chat-log .chat-bubble-user {
     justify-self: end;
     border-bottom-right-radius: 0.25rem;
-    background: var(--taupe-dark);
+    background: var(--chat-user);
     color: var(--surface);
 }
 
 #chat-log .chat-bubble-assistant {
     justify-self: start;
     border-bottom-left-radius: 0.25rem;
-    background: var(--surface-muted);
+    background: var(--chat-assistant);
 }
 
 #chat-log .chat-bubble-error {

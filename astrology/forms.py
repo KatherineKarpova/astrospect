@@ -5,6 +5,15 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 # validate the data from the submitted birth chart generation form
 class BirthChartForm(forms.Form):
+    HOUSE_SYSTEM_CHOICES = (
+        ("whole_sign", "Whole sign"),
+        ("placidus", "Placidus"),
+    )
+    ZODIAC_SYSTEM_CHOICES = (
+        ("tropical", "Tropical"),
+        ("sidereal", "Sidereal (Lahiri/Chitrapaksha)"),
+    )
+
     name = forms.CharField(max_length=100, required=False)
 
     birth_month = forms.IntegerField(min_value=1, max_value=12)
@@ -23,6 +32,16 @@ class BirthChartForm(forms.Form):
     longitude = forms.FloatField(min_value=-180, max_value=180, required=False)
 
     birth_timezone = forms.CharField(max_length=100, required=False)
+    house_system = forms.ChoiceField(
+        choices=HOUSE_SYSTEM_CHOICES,
+        initial="whole_sign",
+        required=False,
+    )
+    zodiac_system = forms.ChoiceField(
+        choices=ZODIAC_SYSTEM_CHOICES,
+        initial="tropical",
+        required=False,
+    )
 
     # check if time zone is in a recognized zone
     def clean_birth_timezone(self):
@@ -87,5 +106,18 @@ class BirthChartForm(forms.Form):
             )
         cleaned_data["has_birth_location"] = has_complete_location
         cleaned_data["needs_location_lookup"] = needs_location_lookup
+        cleaned_data["house_system"] = (
+            cleaned_data.get("house_system") or "whole_sign"
+        )
+        cleaned_data["zodiac_system"] = (
+            cleaned_data.get("zodiac_system") or "tropical"
+        )
+        # keeping the ayanamsa fixed avoids silently mixing sidereal standards;
+        # tropical charts do not use an ayanamsa.
+        cleaned_data["ayanamsa"] = (
+            "lahiri"
+            if cleaned_data.get("zodiac_system") == "sidereal"
+            else None
+        )
 
         return cleaned_data

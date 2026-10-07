@@ -10,6 +10,32 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.conf import settings
 from kerykeion import AstrologicalSubject, KerykeionChartSVG
 
+HOUSE_SYSTEM_IDENTIFIERS = {
+    "whole_sign": "W",
+    "placidus": "P",
+}
+ZODIAC_TYPE_NAMES = {
+    "tropical": "Tropic",
+    "sidereal": "Sidereal",
+}
+SIDEREAL_MODE_NAMES = {
+    "lahiri": "LAHIRI",
+}
+HOUSE_NUMBERS = {
+    "First_House": 1,
+    "Second_House": 2,
+    "Third_House": 3,
+    "Fourth_House": 4,
+    "Fifth_House": 5,
+    "Sixth_House": 6,
+    "Seventh_House": 7,
+    "Eighth_House": 8,
+    "Ninth_House": 9,
+    "Tenth_House": 10,
+    "Eleventh_House": 11,
+    "Twelfth_House": 12,
+}
+
 # make global array so the 4 angels I want in the chart are included on top of the 7 planets and true nodes in active_points
 TRADITIONAL_CHART_POINTS = [ 
     'Sun',
@@ -143,6 +169,8 @@ def calculate_birth_chart(data, timezone_name):
         longitude = data["longitude"]
 
     # this function creates the chart Kerykeion object from the validated form data 
+    zodiac_system = data.get("zodiac_system", "tropical")
+    ayanamsa = data.get("ayanamsa") or "lahiri"
     return AstrologicalSubject(
         name=data.get("name") or "Your Chart",
         year=birth_date.year,
@@ -154,18 +182,32 @@ def calculate_birth_chart(data, timezone_name):
         lng=longitude,
         tz_str=timezone_name,
         online=False,
-        zodiac_type="Tropic",
-        houses_system_identifier="W",
+        zodiac_type=ZODIAC_TYPE_NAMES[zodiac_system],
+        sidereal_mode=(
+            SIDEREAL_MODE_NAMES[ayanamsa]
+            if zodiac_system == "sidereal"
+            else None
+        ),
+        houses_system_identifier=HOUSE_SYSTEM_IDENTIFIERS[
+            data.get("house_system", "whole_sign")
+        ],
     )
 
 
 def calculate_daily_sign_changes(data):
-    """Return planets whose tropical signs differ across the UTC birth date."""
+    """Return selected-zodiac sign changes across the UTC birth date."""
     birth_date = data["birth_date"]
     sign_names = (
         "Aries", "Taurus", "Gemini", "Cancer",
         "Leo", "Virgo", "Libra", "Scorpio",
         "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+    )
+    zodiac_system = data.get("zodiac_system", "tropical")
+    zodiac_type = ZODIAC_TYPE_NAMES[zodiac_system]
+    sidereal_mode = (
+        SIDEREAL_MODE_NAMES[data.get("ayanamsa") or "lahiri"]
+        if zodiac_system == "sidereal"
+        else None
     )
     day_start = AstrologicalSubject(
         name="Daily Sign Check",
@@ -178,7 +220,8 @@ def calculate_daily_sign_changes(data):
         lng=0,
         tz_str="UTC",
         online=False,
-        zodiac_type="Tropic",
+        zodiac_type=zodiac_type,
+        sidereal_mode=sidereal_mode,
         houses_system_identifier="W",
     )
     day_end = AstrologicalSubject(
@@ -192,7 +235,8 @@ def calculate_daily_sign_changes(data):
         lng=0,
         tz_str="UTC",
         online=False,
-        zodiac_type="Tropic",
+        zodiac_type=zodiac_type,
+        sidereal_mode=sidereal_mode,
         houses_system_identifier="W",
     )
     planet_names = ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn")

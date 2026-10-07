@@ -125,6 +125,17 @@ class House(models.Model):
 
 
 class BirthChart(models.Model):
+    class HouseSystem(models.TextChoices):
+        WHOLE_SIGN = "whole_sign", "Whole sign"
+        PLACIDUS = "placidus", "Placidus"
+
+    class ZodiacSystem(models.TextChoices):
+        TROPICAL = "tropical", "Tropical"
+        SIDEREAL = "sidereal", "Sidereal"
+
+    class Ayanamsa(models.TextChoices):
+        LAHIRI = "lahiri", "Lahiri/Chitrapaksha"
+
     # the source form remains queryable as JSON while parsed columns below
     # keep common birthplace and coordinate filters simple and indexable.
     user = models.ForeignKey(
@@ -141,6 +152,22 @@ class BirthChart(models.Model):
     longitude = models.FloatField(null=True, blank=True)
     birth_timezone = models.CharField(max_length=100, null=True, blank=True)
     has_birth_time = models.BooleanField(default=False)
+    house_system = models.CharField(
+        max_length=12,
+        choices=HouseSystem.choices,
+        default=HouseSystem.WHOLE_SIGN,
+    )
+    zodiac_system = models.CharField(
+        max_length=8,
+        choices=ZodiacSystem.choices,
+        default=ZodiacSystem.TROPICAL,
+    )
+    ayanamsa = models.CharField(
+        max_length=20,
+        choices=Ayanamsa.choices,
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
