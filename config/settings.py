@@ -151,9 +151,8 @@ MAILERS = {
 
 # keep the credential on the server.
 # never put it in a django template or browser javascript.
-# Ollama is free to run locally and exposes an OpenAI-compatible API. A hosted
-# OpenAI-compatible endpoint can be selected with the same settings.
-AI_API_KEY = os.getenv("AI_API_KEY", os.getenv("OPENAI_API_KEY", "ollama"))
+# put hugging face fine-grained api with inference permissions
+AI_API_KEY = os.getenv("AI_API_KEY", os.getenv("API_KEY", "huggingface"))
 AI_BASE_URL = os.getenv("AI_BASE_URL", "http://127.0.0.1:11434/v1")
 AI_MODEL = os.getenv("AI_MODEL", os.getenv("OPENAI_MODEL", "llama3.2:3b"))
 AI_TIMEOUT_SECONDS = float(os.getenv("AI_TIMEOUT_SECONDS", "60"))

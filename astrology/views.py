@@ -315,9 +315,7 @@ def chat(request):
         return JsonResponse(
             {
                 "error": (
-                    "The free local AI service is unavailable. "
-                    "Start Ollama and download the configured model, "
-                    "then try again."
+                    "...."
                 )
             },
             status=503,
