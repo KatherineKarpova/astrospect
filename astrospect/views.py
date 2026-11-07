@@ -292,7 +292,7 @@ def delete_saved_chart(request, token):
 
 def chat(request):
     """todo:
-    keep the conversation history sent to Hugging Face bounded, and translate
+    keep the conversation history sent to OpenRouter bounded, and translate
     upstream failures into useful messages without exposing provider details.
     """
     if request.method != "POST":

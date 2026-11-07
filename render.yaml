@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: astrological-introspection
+    name: astrospect
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate
@@ -13,7 +13,7 @@ services:
       - key: DJANGO_ALLOWED_HOSTS
         fromService:
           type: web
-          name: astrological-introspection
+          name: astrospect
           property: host
       - key: GEOAPIFY_API_KEY
         sync: false

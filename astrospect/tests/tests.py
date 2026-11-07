@@ -44,7 +44,7 @@ class HuggingFaceInferenceTests(SimpleTestCase):
                 "placement_summaries": {},
             }
             with patch(
-                "astrology.views.active_chart",
+                "astrospect.views.active_chart",
                 return_value=(None, {
                     "planets": [{"name": "Sun", "sign": "Leo"}],
                     "angles": [],
@@ -76,12 +76,12 @@ class HuggingFaceInferenceTests(SimpleTestCase):
         }
 
         with patch(
-            "astrology.views.active_chart",
+            "astrospect.views.active_chart",
             return_value=(None, {
                 "planets": [{"name": "Sun", "sign": "Leo"}],
                 "angles": [],
             }),
-        ), patch("astrology.views.summarize_placement") as summarize:
+        ), patch("astrospect.views.summarize_placement") as summarize:
             response = placement_summary(request)
 
         self.assertEqual(response.status_code, 200)
@@ -103,7 +103,7 @@ class HuggingFaceInferenceTests(SimpleTestCase):
             )))
         ]
 
-        with patch("astrology.chatbot.OpenAI", return_value=client) as openai_client:
+        with patch("astrospect.chatbot.OpenAI", return_value=client) as openai_client:
             result = ask_chart_guide({}, "What stands out?", [])
 
         openai_client.assert_called_once_with(
@@ -151,7 +151,7 @@ class PlacementSummaryViewTests(TestCase):
                 }
             ],
         }
-        with patch("astrology.views.summarize_placement", return_value=result):
+        with patch("astrospect.views.summarize_placement", return_value=result):
             response = self.client.post(
                 "/placement-summary/",
                 {"placement": "sun"},
@@ -165,7 +165,7 @@ class PlacementSummaryViewTests(TestCase):
             "summary": "Moon in Gemini connects thought with home and roots.",
             "sources": [],
         }
-        with patch("astrology.views.summarize_placement", return_value=result) as generate:
+        with patch("astrospect.views.summarize_placement", return_value=result) as generate:
             first = self.client.post("/placement-summary/", {"placement": "sun"})
             second = self.client.post("/placement-summary/", {"placement": "sun"})
 
@@ -208,7 +208,7 @@ class PlacementSummaryViewTests(TestCase):
         session.save()
         result = {"summary": "Stable saved summary.", "sources": []}
 
-        with patch("astrology.views.summarize_placement", return_value=result) as generate:
+        with patch("astrospect.views.summarize_placement", return_value=result) as generate:
             first = self.client.post("/placement-summary/", {"placement": "sun"})
             second = self.client.post("/placement-summary/", {"placement": "sun"})
 
@@ -233,7 +233,7 @@ class PlacementSummaryViewTests(TestCase):
         self.assertFalse(SavedChart.objects.filter(pk=chart.pk).exists())
 
     def test_rejects_placement_not_in_session_chart(self):
-        with patch("astrology.views.summarize_placement") as summarize:
+        with patch("astrospect.views.summarize_placement") as summarize:
             response = self.client.post(
                 "/placement-summary/",
                 {"placement": "pluto"},
@@ -250,7 +250,7 @@ class PlacementSummaryViewTests(TestCase):
 
 class TraditionalChartContextTests(TestCase):
     def test_birth_time_without_location_is_used_as_utc_planetary_time(self):
-        with patch("astrology.services.AstrologicalSubject") as subject_factory:
+        with patch("astrospect.services.AstrologicalSubject") as subject_factory:
             calculate_birth_chart(
                 {
                     "name": "Test",
@@ -329,7 +329,7 @@ class TraditionalChartContextTests(TestCase):
         self.assertTrue(all(planet["house"] is None for planet in context["planets"]))
 
     def test_daily_sign_change_detector_checks_all_traditional_planets(self):
-        with patch("astrology.services.AstrologicalSubject") as subject_factory:
+        with patch("astrospect.services.AstrologicalSubject") as subject_factory:
             subject_factory.side_effect = [
                 SimpleNamespace(**{
                     name.lower(): SimpleNamespace(sign_num=0)
@@ -395,7 +395,7 @@ class TraditionalChartContextTests(TestCase):
             "house_strength": "non-angular",
         }
 
-        with patch("astrology.chatbot.OpenAI", return_value=client):
+        with patch("astrospect.chatbot.OpenAI", return_value=client):
             result = summarize_placement(
                 {"zodiac": "tropical", "house_system": "whole_sign"},
                 placement,
@@ -438,7 +438,7 @@ class TraditionalChartContextTests(TestCase):
             ],
         }
 
-        with patch("astrology.chatbot.OpenAI", return_value=client):
+        with patch("astrospect.chatbot.OpenAI", return_value=client):
             result = summarize_placement(context, {
                 "name": "Ascendant",
                 "sign": "Sagittarius",
@@ -458,7 +458,7 @@ class TraditionalChartContextTests(TestCase):
                 content="Your Ascendant shapes how you approach relationships."
             ))
         ]
-        with patch("astrology.chatbot.OpenAI", return_value=client):
+        with patch("astrospect.chatbot.OpenAI", return_value=client):
             result = summarize_placement(
                 {"zodiac": "tropical", "house_system": "whole_sign"},
                 {
@@ -487,7 +487,7 @@ class TraditionalChartContextTests(TestCase):
             "<g kr:node='ChartPoint' kr:house='Fifth_House' "
             "kr:sign='Ari' kr:slug='Saturn'></g></svg>"
         )
-        with patch("astrology.services.KerykeionChartSVG") as chart_svg:
+        with patch("astrospect.services.KerykeionChartSVG") as chart_svg:
             chart_svg.return_value.makeWheelOnlyTemplate.return_value = svg
             result = generate_chart_svg(object(), show_houses=True)
 
@@ -552,7 +552,7 @@ class ChartPagePlacementTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertTrue(form.cleaned_data["needs_location_lookup"])
 
-    @patch("astrology.services.urlopen")
+    @patch("astrospect.services.urlopen")
     def test_server_birthplace_lookup_resolves_coordinates_and_timezone(self, open_url):
         response = MagicMock()
         response.read.return_value = (
@@ -561,18 +561,18 @@ class ChartPagePlacementTests(TestCase):
             b'"timezone":{"name":"America/New_York"}}]}'
         )
         open_url.return_value.__enter__.return_value = response
-        with patch("astrology.services.settings.GEOAPIFY_API_KEY", "test-key"):
+        with patch("astrospect.services.settings.GEOAPIFY_API_KEY", "test-key"):
             result = resolve_birthplace("Miami, Florida")
         self.assertEqual(result["location_id"], "miami-id")
         self.assertEqual(result["birth_timezone"], "America/New_York")
         self.assertEqual(result["latitude"], 25.77)
 
-    @patch("astrology.views.resolve_birthplace")
-    @patch("astrology.views.generate_chart_svg", return_value="<svg></svg>")
-    @patch("astrology.views.build_chart_context", return_value={
+    @patch("astrospect.views.resolve_birthplace")
+    @patch("astrospect.views.generate_chart_svg", return_value="<svg></svg>")
+    @patch("astrospect.views.build_chart_context", return_value={
         "birth_location_known": True, "planets": [], "angles": [],
     })
-    @patch("astrology.views.calculate_birth_chart", return_value=object())
+    @patch("astrospect.views.calculate_birth_chart", return_value=object())
     def test_text_autofilled_birthplace_is_resolved_without_suggestion_selection(
         self,
         calculate_chart,
@@ -628,10 +628,10 @@ class ChartPagePlacementTests(TestCase):
         }
 
         with (
-            patch("astrology.views.calculate_daily_sign_changes", return_value={"Moon": ["Gemini", "Cancer"]}) as sign_changes,
-            patch("astrology.views.calculate_birth_chart", return_value=object()) as calculate_chart,
-            patch("astrology.views.build_chart_context", return_value=context) as build_context,
-            patch("astrology.views.generate_chart_svg", return_value="<svg></svg>") as render_svg,
+            patch("astrospect.views.calculate_daily_sign_changes", return_value={"Moon": ["Gemini", "Cancer"]}) as sign_changes,
+            patch("astrospect.views.calculate_birth_chart", return_value=object()) as calculate_chart,
+            patch("astrospect.views.build_chart_context", return_value=context) as build_context,
+            patch("astrospect.views.generate_chart_svg", return_value="<svg></svg>") as render_svg,
         ):
             response = self.client.post("/chart/", post_data)
 
@@ -683,9 +683,9 @@ class ChartPagePlacementTests(TestCase):
         self.assertTrue(response.context["form"].errors)
         self.assertContains(response, 'role="alert"')
 
-    @patch("astrology.views.generate_chart_svg", return_value="<svg>1st House</svg>")
+    @patch("astrospect.views.generate_chart_svg", return_value="<svg>1st House</svg>")
     @patch(
-        "astrology.views.build_chart_context",
+        "astrospect.views.build_chart_context",
         return_value={
             "planets": [
                 {
@@ -702,7 +702,7 @@ class ChartPagePlacementTests(TestCase):
             "angles": [],
         },
     )
-    @patch("astrology.views.calculate_birth_chart", return_value=object())
+    @patch("astrospect.views.calculate_birth_chart", return_value=object())
     def test_chart_page_renders_sign_house_and_dignity(
         self,
         calculate_chart,
@@ -739,12 +739,12 @@ class ChartPagePlacementTests(TestCase):
         self.assertContains(response, "Traditional source:")
         self.assertNotContains(response, "Copy private link")
 
-    @patch("astrology.views.generate_chart_svg", return_value="<svg>chart</svg>")
+    @patch("astrospect.views.generate_chart_svg", return_value="<svg>chart</svg>")
     @patch(
-        "astrology.views.build_chart_context",
+        "astrospect.views.build_chart_context",
         return_value={"planets": [], "angles": [], "birth_location_known": False},
     )
-    @patch("astrology.views.calculate_birth_chart", return_value=object())
+    @patch("astrospect.views.calculate_birth_chart", return_value=object())
     def test_browser_cache_is_opt_in_and_chart_is_not_stored_in_saved_chart_table(
         self,
         calculate_chart,

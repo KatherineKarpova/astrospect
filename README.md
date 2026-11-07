@@ -1,4 +1,4 @@
-# Astrological Introspection
+# Astrospect
 
 This Django app calculates **tropical zodiac, whole-sign houses** and offers a
 source-grounded chat guide using approved traditional Jyotisha texts only. It

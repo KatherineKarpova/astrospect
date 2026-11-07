@@ -45,7 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    "astrology",
+    "astrospect.apps.AstrospectConfig",
 ]
 
 MIDDLEWARE = [
@@ -151,9 +151,9 @@ MAILERS = {
 
 # keep the Hugging Face credential server-side; never expose it in a template.
 # the model stays configurable because Hugging Face's routed catalog changes.
-AI_API_KEY = os.getenv("HF_TOKEN", "")
-AI_BASE_URL = os.getenv("HF_BASE_URL", "https://router.huggingface.co/v1")
-AI_MODEL = os.getenv("HF_MODEL", "")
+AI_API_KEY = os.getenv("AI_API_KEY")
+AI_BASE_URL = os.getenv("AI_BASE_URL")
+AI_MODEL = os.getenv("AI_MODEL", "")
 AI_TIMEOUT_SECONDS = float(os.getenv("AI_TIMEOUT_SECONDS", "60"))
 
 if not DEBUG:

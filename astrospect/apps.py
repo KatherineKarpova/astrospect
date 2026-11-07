@@ -1,5 +1,6 @@
 from django.apps import AppConfig
 
 
-class AstrologyConfig(AppConfig):
-    name = 'astrology'
+class AstrospectConfig(AppConfig):
+    name = "astrospect"
+    label = "astrology"
