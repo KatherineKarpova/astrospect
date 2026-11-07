@@ -1,21 +1,121 @@
 import hashlib
+import json
 import secrets
 from datetime import date, time
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 
-from astrology.chatbot import SOURCES, build_chart_context, summarize_placement
-from astrology.forms import BirthChartForm
-from astrology.models import SavedChart
-from astrology.services import (
+from astrospect.chatbot import (
+    SOURCES,
+    ask_chart_guide,
+    build_chart_context,
+    summarize_placement,
+)
+from astrospect.forms import BirthChartForm
+from astrospect.models import SavedChart
+from astrospect.services import (
     BirthplaceLookupError,
     calculate_birth_chart,
     calculate_daily_sign_changes,
     generate_chart_svg,
     resolve_birthplace,
 )
+from astrospect.views import (
+    PLACEMENT_SUMMARY_VERSION,
+    chat,
+    placement_summary,
+)
+
+
+class HuggingFaceInferenceTests(SimpleTestCase):
+    def test_chat_and_summaries_stay_disabled_without_an_explicit_model(self):
+        request_factory = RequestFactory()
+
+        with override_settings(AI_API_KEY="test-hf-token", AI_MODEL=""):
+            chat_response = chat(request_factory.post("/chat/"))
+            summary_request = request_factory.post(
+                "/placement-summary/",
+                {"placement": "sun"},
+            )
+            summary_request.session = {
+                "placement_summary_version": PLACEMENT_SUMMARY_VERSION,
+                "placement_summaries": {},
+            }
+            with patch(
+                "astrology.views.active_chart",
+                return_value=(None, {
+                    "planets": [{"name": "Sun", "sign": "Leo"}],
+                    "angles": [],
+                }),
+            ):
+                summary_response = placement_summary(summary_request)
+
+        self.assertEqual(chat_response.status_code, 503)
+        self.assertEqual(summary_response.status_code, 503)
+        self.assertIn(
+            "choose an HF_MODEL",
+            json.loads(chat_response.content)["error"],
+        )
+        self.assertIn(
+            "choose an HF_MODEL",
+            json.loads(summary_response.content)["error"],
+        )
+
+    @override_settings(AI_API_KEY="", AI_MODEL="")
+    def test_cached_summary_remains_available_without_ai_configuration(self):
+        request = RequestFactory().post(
+            "/placement-summary/",
+            {"placement": "sun"},
+        )
+        cached_result = {"summary": "Previously generated.", "sources": []}
+        request.session = {
+            "placement_summary_version": PLACEMENT_SUMMARY_VERSION,
+            "placement_summaries": {"sun": cached_result},
+        }
+
+        with patch(
+            "astrology.views.active_chart",
+            return_value=(None, {
+                "planets": [{"name": "Sun", "sign": "Leo"}],
+                "angles": [],
+            }),
+        ), patch("astrology.views.summarize_placement") as summarize:
+            response = placement_summary(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(response.content), cached_result)
+        summarize.assert_not_called()
+
+    @override_settings(
+        AI_API_KEY="test-hf-token",
+        AI_BASE_URL="https://router.huggingface.co/v1",
+        AI_MODEL="meta-llama/Llama-3.1-8B-Instruct",
+        AI_TIMEOUT_SECONDS=60,
+    )
+    def test_chat_uses_hugging_face_settings_without_provider_specific_json_mode(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value.choices = [
+            MagicMock(message=MagicMock(content=(
+                '{"answer":"A chart-based answer.","reflection":"What resonates?",'
+                '"source_ids":["BPHS"]}'
+            )))
+        ]
+
+        with patch("astrology.chatbot.OpenAI", return_value=client) as openai_client:
+            result = ask_chart_guide({}, "What stands out?", [])
+
+        openai_client.assert_called_once_with(
+            api_key="test-hf-token",
+            base_url="https://router.huggingface.co/v1",
+            timeout=60,
+            max_retries=0,
+        )
+        request = client.chat.completions.create.call_args.kwargs
+        self.assertEqual(request["model"], "meta-llama/Llama-3.1-8B-Instruct")
+        self.assertNotIn("response_format", request)
+        self.assertEqual(result["answer"], "A chart-based answer.")
 
 
 class PlacementSummaryViewTests(TestCase):
@@ -667,7 +767,7 @@ class ChartPagePlacementTests(TestCase):
         self.assertContains(response, "Saved in this browser")
 
     def test_planet_house_note_is_not_repeated_on_each_placement(self):
-        from astrology.views import chart_display_context
+        from astrospect.views import chart_display_context
 
         context = chart_display_context(
             {

@@ -19,9 +19,8 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
-      # Configure a hosted OpenAI-compatible endpoint in the dashboard.
-      # A Render container cannot reach Ollama running on your computer.
-      - key: AI_BASE_URL
-        value: ""
-      - key: AI_MODEL
+      # add a fine-grained Hugging Face token with Inference Providers access.
+      - key: HF_TOKEN
+        sync: false
+      - key: HF_MODEL
         value: ""

@@ -31,36 +31,38 @@ browser profile can restore it. Use **Clear saved chart from this browser** on
 the chart page (or clear the site data in the browser) to remove it. Existing
 private links created by an earlier version remain available.
 
-## Free AI setup
+## Hugging Face inference setup
 
-The default configuration uses [Ollama](https://ollama.com/) locally. Ollama
-and the `llama3.2:3b` model are free to run on your own computer; no model API
-key or per-message billing is required:
+The chat and placement summaries use the Hugging Face Inference Providers
+router through its OpenAI-compatible API. Set these values in `.env`:
 
 ```text
-ollama pull llama3.2:3b
-copy .env.example .env
-python manage.py migrate
-ollama serve
-python manage.py runserver
+HF_TOKEN=your_fine_grained_hugging_face_token
+HF_MODEL=
+HF_BASE_URL=https://router.huggingface.co/v1
 ```
 
-The server sends chart facts, the approved source catalog in
-`shared/sources.json`, and bounded chat history to the model. It never sends
-the user's name or raw birth location to the model.
+Give the token permission to make calls to Inference Providers. Keep `HF_MODEL`
+empty until you have selected a model and confirmed its cost; the app keeps
+inference disabled while this setting is empty. The app does not send the token
+to the browser.
 
-For a hosted model, set `AI_BASE_URL`, `AI_API_KEY`, and `AI_MODEL` to an
-OpenAI-compatible provider. “Free” hosted inference is subject to that
-provider's quota and terms; the local Ollama path is the only no-billing
-option this project can guarantee.
+Anthropic Claude models are not currently listed in Hugging Face's Inference
+Providers catalog. A Hugging Face token by itself does not include free
+inference credits: Hugging Face currently lists no included Inference Provider
+credits for Free accounts. Check your account's billing/credits and the
+selected model's provider availability before enabling live inference.
+
+The server sends chart facts, the approved source catalog in
+`shared/sources.json`, and bounded chat history to Hugging Face for inference.
+It does not include the user's name or raw birth location in those prompts.
 
 ## Free HTTPS deployment
 
 `render.yaml` describes a Render free web service. Render provides a free
 `onrender.com` subdomain and managed HTTPS certificate automatically. Deploy
-from the repository using Render Blueprint, then set `GEOAPIFY_API_KEY` and a
-hosted `AI_BASE_URL`/`AI_API_KEY` in the dashboard if chat must work while
-hosted. A local Ollama server cannot be reached from Render.
+from the repository using Render Blueprint, then set `GEOAPIFY_API_KEY` and
+`HF_TOKEN` in the dashboard if chat must work while hosted.
 
 A custom registrable domain is not normally free. If you later buy one,
 attach it in Render and use its automatic certificate, or put it behind

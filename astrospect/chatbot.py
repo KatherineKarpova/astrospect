@@ -139,7 +139,10 @@ def _placement_summary_fallback(placement):
 
 
 def summarize_placement(chart_context, placement):
-    """Generate one source-grounded, plain-language placement summary."""
+    """todo:
+    send only the selected placement and its calculation methods to the hosted
+    model, then validate the output and use the local fallback if it is unusable.
+    """
     if not isinstance(placement, dict):
         raise ValueError("Unknown chart placement.")
 
@@ -234,7 +237,10 @@ def ask_chart_guide(
     level="auto",
     tone="auto",
 ):
-    """generate an explanation using calculated facts and recent chat."""
+    """todo:
+    keep recent history bounded to limit sensitive data sent to the provider,
+    and validate every model field because hosted model output is untrusted.
+    """
 
     # explicit preferences override the model's estimate.
     # automatic mode leaves the level and tone to the instructions.
@@ -288,15 +294,10 @@ def ask_chart_guide(
         model=settings.AI_MODEL,
         messages=messages,
 
-        # request a machine-readable response so django can separate
-        # the answer, reflection question, and source references.
-        response_format={"type": "json_object"},
-
+        # the policy requests JSON and the code validates it; skipping
+        # provider-specific JSON mode keeps more hosted models compatible.
         # bound response length and the cost of an individual answer.
         max_tokens=850,
-
-        # request that this completion not be stored by this feature.
-        # this does not mean the provider never processes request data.
     )
 
     raw_content = completion.choices[0].message.content

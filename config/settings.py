@@ -149,12 +149,11 @@ MAILERS = {
     },
 }
 
-# keep the credential on the server.
-# never put it in a django template or browser javascript.
-# put hugging face fine-grained api with inference permissions
-AI_API_KEY = os.getenv("AI_API_KEY", os.getenv("API_KEY", "huggingface"))
-AI_BASE_URL = os.getenv("AI_BASE_URL", "http://127.0.0.1:11434/v1")
-AI_MODEL = os.getenv("AI_MODEL", os.getenv("OPENAI_MODEL", "llama3.2:3b"))
+# keep the Hugging Face credential server-side; never expose it in a template.
+# the model stays configurable because Hugging Face's routed catalog changes.
+AI_API_KEY = os.getenv("HF_TOKEN", "")
+AI_BASE_URL = os.getenv("HF_BASE_URL", "https://router.huggingface.co/v1")
+AI_MODEL = os.getenv("HF_MODEL", "")
 AI_TIMEOUT_SECONDS = float(os.getenv("AI_TIMEOUT_SECONDS", "60"))
 
 if not DEBUG:

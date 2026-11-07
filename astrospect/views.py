@@ -7,7 +7,7 @@ from django.http import Http404
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
-from openai import APIConnectionError, APITimeoutError
+from openai import APIConnectionError, APIStatusError, APITimeoutError
 from .models import SavedChart
 from .forms import BirthChartForm
 from .services import (
@@ -88,7 +88,9 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
             if chart_context.get("daily_sign_changes")
             else ""
         ),
-        'chat_enabled': bool(settings.AI_BASE_URL and settings.AI_MODEL),
+        'chat_enabled': bool(
+            settings.AI_API_KEY and settings.AI_BASE_URL and settings.AI_MODEL
+        ),
         'planet_placements': [
             {
                 **planet,
@@ -289,8 +291,23 @@ def delete_saved_chart(request, token):
 
 
 def chat(request):
+    """todo:
+    keep the conversation history sent to Hugging Face bounded, and translate
+    upstream failures into useful messages without exposing provider details.
+    """
     if request.method != "POST":
         return JsonResponse({"error": "POST required."}, status=405)
+
+    if not settings.AI_API_KEY or not settings.AI_MODEL:
+        return JsonResponse(
+            {
+                "error": (
+                    "Hugging Face inference is not configured. Set HF_TOKEN "
+                    "and choose an HF_MODEL before enabling inference."
+                )
+            },
+            status=503,
+        )
 
     _, chart_context = active_chart(request)
     if not chart_context:
@@ -315,7 +332,19 @@ def chat(request):
         return JsonResponse(
             {
                 "error": (
-                    "...."
+                    "Hugging Face inference could not be reached. "
+                    "Check your connection and try again."
+                )
+            },
+            status=503,
+        )
+    except APIStatusError:
+        return JsonResponse(
+            {
+                "error": (
+                    "Hugging Face rejected the inference request. Check that "
+                    "HF_TOKEN has inference permission, your account has "
+                    "available credits, and HF_MODEL is available."
                 )
             },
             status=503,
@@ -330,6 +359,11 @@ def chat(request):
 
 
 def placement_summary(request):
+    """todo:
+    validate that the requested placement belongs to the active chart and
+    return cached summaries before making an inference request; provider errors
+    must never expose credentials or raw upstream response data.
+    """
     if request.method != "POST":
         return JsonResponse({"error": "POST required."}, status=405)
 
@@ -368,6 +402,17 @@ def placement_summary(request):
     if placement_key in summary_cache:
         return JsonResponse(summary_cache[placement_key])
 
+    if not settings.AI_API_KEY or not settings.AI_MODEL:
+        return JsonResponse(
+            {
+                "error": (
+                    "Hugging Face inference is not configured. Set HF_TOKEN "
+                    "and choose an HF_MODEL before enabling inference."
+                )
+            },
+            status=503,
+        )
+
     try:
         result = summarize_placement(chart_context, placement)
     except (ValueError, OSError) as exc:
@@ -376,8 +421,19 @@ def placement_summary(request):
         return JsonResponse(
             {
                 "error": (
-                    "The local AI service is unavailable. Start Ollama and "
-                    "download the configured model, then try again."
+                    "Hugging Face inference could not be reached. "
+                    "Check your connection and try again."
+                )
+            },
+            status=503,
+        )
+    except APIStatusError:
+        return JsonResponse(
+            {
+                "error": (
+                    "Hugging Face rejected the inference request. Check that "
+                    "HF_TOKEN has inference permission, your account has "
+                    "available credits, and HF_MODEL is available."
                 )
             },
             status=503,
