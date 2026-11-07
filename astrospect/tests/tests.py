@@ -29,11 +29,11 @@ from astrospect.views import (
 )
 
 
-class HuggingFaceInferenceTests(SimpleTestCase):
+class AIProviderTests(SimpleTestCase):
     def test_chat_and_summaries_stay_disabled_without_an_explicit_model(self):
         request_factory = RequestFactory()
 
-        with override_settings(AI_API_KEY="test-hf-token", AI_MODEL=""):
+        with override_settings(AI_API_KEY="test-api-key", AI_MODEL=""):
             chat_response = chat(request_factory.post("/chat/"))
             summary_request = request_factory.post(
                 "/placement-summary/",
@@ -91,7 +91,7 @@ class HuggingFaceInferenceTests(SimpleTestCase):
     @override_settings(
         AI_API_KEY="test-hf-token",
         AI_BASE_URL="https://router.huggingface.co/v1",
-        AI_MODEL="meta-llama/Llama-3.1-8B-Instruct",
+        AI_MODEL="test-model",
         AI_TIMEOUT_SECONDS=60,
     )
     def test_chat_uses_hugging_face_settings_without_provider_specific_json_mode(self):
@@ -113,7 +113,7 @@ class HuggingFaceInferenceTests(SimpleTestCase):
             max_retries=0,
         )
         request = client.chat.completions.create.call_args.kwargs
-        self.assertEqual(request["model"], "meta-llama/Llama-3.1-8B-Instruct")
+        self.assertEqual(request["model"], "test-model")
         self.assertNotIn("response_format", request)
         self.assertEqual(result["answer"], "A chart-based answer.")
 
