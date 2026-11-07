@@ -141,7 +141,7 @@ def active_chart(request):
 # display the birth chart form and calculate after valid submission
 def index(request):
     
-    return render(request, 'astrology/index.html',{
+    return render(request, 'astrospect/index.html',{
         'geoapify_api_key': settings.GEOAPIFY_API_KEY,
         })
 
@@ -158,7 +158,7 @@ def chart(request):
                     form.add_error(None, str(exc))
                     return render(
                         request,
-                        "astrology/index.html",
+                        "astrospect/index.html",
                         {
                             "form": form,
                             "geoapify_api_key": settings.GEOAPIFY_API_KEY,
@@ -201,7 +201,7 @@ def chart(request):
             request.session.pop("placement_summary_version", None)
             response = render(
                 request,
-                "astrology/chart.html",
+                "astrospect/chart.html",
                 {
                     **chart_display_context(
                         chart_context,
@@ -227,7 +227,7 @@ def chart(request):
             return response
         return render(
             request,
-            "astrology/index.html",
+            "astrospect/index.html",
             {
                 "form": form,
                 "geoapify_api_key": settings.GEOAPIFY_API_KEY,
@@ -237,7 +237,7 @@ def chart(request):
         form = BirthChartForm()
         # display the form for a get request, or redisplay it with
         # validation errors after an unsuccessful submission
-        return render(request, 'astrology/index.html',{
+        return render(request, 'astrospect/index.html',{
             'form': form,
             'geoapify_api_key': settings.GEOAPIFY_API_KEY,
             })
@@ -251,7 +251,7 @@ def saved_chart(request, token):
     request.session["saved_chart_id"] = chart.pk
     response = render(
             request,
-            "astrology/chart.html",
+            "astrospect/chart.html",
             {
                 **chart_display_context(
                     chart.chart_context,
