@@ -225,6 +225,15 @@ python manage.py collectstatic --no-input && python manage.py migrate
 gunicorn config.wsgi:application
 ```
 
+The Render build runs `collectstatic`, which gathers the app's assets into
+`STATIC_ROOT` (`staticfiles/`). WhiteNoise is installed in the project
+dependencies and its middleware is placed immediately after Django's
+`SecurityMiddleware`. In production, Django's compressed manifest storage
+creates versioned static asset names, and WhiteNoise serves those collected
+files at `/static/` directly from the web service. No separate static site,
+CDN, or Render static-file service is required. Keep `STATIC_URL` as an
+absolute `/static/` path so asset links work from nested application routes.
+
 Render provides an `onrender.com` subdomain and managed HTTPS for its web
 services. Keep database and provider credentials in the hosting provider's
 environment settings, never in `render.yaml` or Git. Free hosting and free
