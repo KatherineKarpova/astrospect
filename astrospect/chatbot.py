@@ -195,7 +195,7 @@ def summarize_placement(chart_context, placement):
                 }),
             },
         ],
-        max_tokens=300,
+        max_tokens=1500,
     )
     raw_content = completion.choices[0].message.content
     if not isinstance(raw_content, str) or not raw_content.strip():
@@ -297,7 +297,7 @@ def ask_chart_guide(
         # the policy requests JSON and the code validates it; skipping
         # provider-specific JSON mode keeps more hosted models compatible.
         # bound response length and the cost of an individual answer.
-        max_tokens=850,
+        max_tokens=2500,
     )
 
     raw_content = completion.choices[0].message.content
