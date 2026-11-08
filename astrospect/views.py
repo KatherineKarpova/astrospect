@@ -328,23 +328,12 @@ def chat(request):
         )
     except (ValueError, OSError) as exc:
         return JsonResponse({"error": str(exc)}, status=503)
-    except (APIConnectionError, APITimeoutError):
+    except (APIConnectionError, APITimeoutError, APIStatusError):
         return JsonResponse(
             {
                 "error": (
-                    "Hugging Face inference could not be reached. "
-                    "Check your connection and try again."
-                )
-            },
-            status=503,
-        )
-    except APIStatusError:
-        return JsonResponse(
-            {
-                "error": (
-                    "Hugging Face rejected the inference request. Check that "
-                    "HF_TOKEN has inference permission, your account has "
-                    "available credits, and HF_MODEL is available."
+                    "AI features are not configured right now."
+                    "Please try again later."
                 )
             },
             status=503,
