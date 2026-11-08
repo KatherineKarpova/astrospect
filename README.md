@@ -49,7 +49,7 @@ database into PostgreSQL.
 
 The application uses the OpenAI Python SDK's Chat Completions interface, but
 that does **not** mean it is locked to OpenAI-hosted models. The SDK supports an
-OpenAI-compatible API endpoint, so Astrospect selects its provider, model, and
+OpenAI-compatible API endpoint, so astrospect selects its provider, model, and
 credential through environment variables rather than hard-coding a provider
 into chart or chat code.
 
@@ -71,7 +71,7 @@ source URLs.
 ### Requirements
 
 - Python and pip
-- A PostgreSQL server and a database/user for Astrospect
+- A PostgreSQL server and a database/user for astrospect
 - An OpenRouter API key and a model that supports the compatible API, if you
   want live AI responses
 - A Geoapify API key, if users should be able to look up birthplaces
