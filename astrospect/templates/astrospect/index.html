@@ -5,13 +5,13 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" href="https://unpkg.com/@geoapify/geocoder-autocomplete@3/styles/minimal.css">
-        <link rel="stylesheet" href="{% static 'astrospect/style.css' %}">
-        <title>Astrological Instrospection</title>
+        <link rel="stylesheet" href="{% static 'astrospect/style.css' %}?v=20261007-chat-colors">
+        <title>Astrospect</title>
     </head>
     <body class="site-shell">
         <main class="page-wrap">
         <header class="page-heading">
-            <p class="eyebrow">A quieter kind of astrology</p>
+            <p class="eyebrow">Astrology as a psychological framework for introspection.</p>
             <h1>Explore your birth chart</h1>
             <p>Discover your tropical, whole-sign chart and reflect on its traditional symbolism.</p>
         </header>
@@ -32,31 +32,35 @@
                 <label for="name">Name:</label>
                 <input type="text" id="name" name="name"><br>
                 <fieldset>
-                    <legend>Date of Birth</legend>
-                        <label for="birth-month">Month</label>
-                        <select id="birth-month" name="birth_month" required>
-                            <option value="" disabled selected>Select month</option>
-                            <option value="1">January</option>
-                            <option value="2">February</option>
-                            <option value="3">March</option>
-                            <option value="4">April</option>
-                            <option value="5">May</option>
-                            <option value="6">June</option>
-                            <option value="7">July</option>
-                            <option value="8">August</option>
-                            <option value="9">September</option>
-                            <option value="10">October</option>
-                            <option value="11">November</option>
-                            <option value="12">December</option>
-                        </select>
-
-                        <label for="birth-day">Day</label>
-                        <input type="number" id="birth-day" name="birth_day"
-                            min="1" max="31" required>
-
-                        <label for="birth-year">Year</label>
-                        <input type="number" id="birth-year" name="birth_year"
-                            min="1900" max="2026" required>
+                    <div class="date-fields">
+                        <div class="date-field">
+                            <label for="birth-month">Month</label>
+                            <select id="birth-month" name="birth_month" required>
+                                <option value="" disabled selected>Select month</option>
+                                <option value="1">January</option>
+                                <option value="2">February</option>
+                                <option value="3">March</option>
+                                <option value="4">April</option>
+                                <option value="5">May</option>
+                                <option value="6">June</option>
+                                <option value="7">July</option>
+                                <option value="8">August</option>
+                                <option value="9">September</option>
+                                <option value="10">October</option>
+                                <option value="11">November</option>
+                                <option value="12">December</option>
+                            </select>
+                        </div>
+                        <div class="date-field">
+                            <label for="birth-day">Day</label>
+                            <input type="number" id="birth-day" name="birth_day" min="1" max="31" required>
+                        </div>
+                        <div class="date-field">
+                            <label for="birth-year">Year</label>
+                            <input type="number" id="birth-year" name="birth_year"
+                                min="1900" max="2026" required>
+                        </div>
+                    </div>
                 </fieldset>
                 <label for="birthplace">Birthplace (optional)</label>
                 <div id="birthplace-autocomplete"></div>
@@ -91,6 +95,34 @@
                     Save my chart details in this browser
                 </label>
                 <p class="field-hint">This stores the birth details on this device only, so you can restore the chart in this browser. Do not select this on a shared device.</p>
+                <fieldset class="chart-method-fields">
+                    <legend>Chart methods</legend>
+                    <label for="zodiac-system">Zodiac</label>
+                    <select id="zodiac-system" name="zodiac_system">
+                        <option value="tropical"
+                            {% if form.zodiac_system.value == "tropical" or not form.zodiac_system.value %}selected{% endif %}>
+                            Tropical
+                        </option>
+                        <option value="sidereal"
+                            {% if form.zodiac_system.value == "sidereal" %}selected{% endif %}>
+                            Sidereal (Lahiri/Chitrapaksha)
+                        </option>
+                    </select>
+                    <p class="field-hint">Sidereal uses Lahiri/Chitrapaksha ayanamsa. Only the selected zodiac is used for planetary signs.</p>
+                    <label for="house-system">House system</label>
+                    <select id="house-system" name="house_system">
+                        <option value="whole_sign"
+                            {% if form.house_system.value == "whole_sign" or not form.house_system.value %}selected{% endif %}>
+                            Whole sign (default)
+                        </option>
+                        <option value="placidus"
+                            {% if form.house_system.value == "placidus" %}selected{% endif %}>
+                            Placidus
+                        </option>
+                    </select>
+                    <p class="field-hint">Only the selected house system determines house placements. Houses require a birth time and birthplace.</p>
+                    <p class="field-hint">Calculation reference: <a href="https://www.astro.com/swisseph/swephprg.htm" target="_blank" rel="noopener noreferrer">Swiss Ephemeris Programmer's Manual</a>. It documents calculation methods, not interpretive claims.</p>
+                </fieldset>
                 <p id="browser-cache-status" class="field-hint" aria-live="polite"></p>
                 <button id="restore-saved-chart" class="button-secondary" type="button" hidden>
                     Restore chart saved in this browser
@@ -144,7 +176,7 @@
                     for (const field of [
                         "name", "birth_month", "birth_day", "birth_year",
                         "birth_time", "birthplace", "location_id", "latitude",
-                        "longitude", "birth_timezone"
+                        "longitude", "birth_timezone", "house_system", "zodiac_system"
                     ]) {
                         details[field] = data.get(field) || "";
                     }
