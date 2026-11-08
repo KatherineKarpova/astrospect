@@ -2,7 +2,9 @@ import json
 import re
 from django.conf import settings
 from openai import OpenAI
+import logging
 
+logger = logging.getLogger(__name__)
 
 # load these server-controlled files.
 # the user can ask questions, but cannot replace the application's
@@ -196,9 +198,17 @@ def summarize_placement(chart_context, placement):
             },
         ],
         max_tokens=1500,
+        extra_body={"reasoning": {"enabled": False}},
     )
-    raw_content = completion.choices[0].message.content
+    choice = completion.choices[0]
+    raw_content = choice.message.content
     if not isinstance(raw_content, str) or not raw_content.strip():
+        logger.warning(
+            "Empty placement summary: finish_reason=%s usage=%s has_reasoning=%s",
+            choice.finish_reason,
+            completion.usage,
+            bool(getattr(choice.message, "reasoning", None)),
+        )
         raise ValueError("The model did not return a placement summary.")
 
     summary = raw_content.strip()
@@ -298,6 +308,7 @@ def ask_chart_guide(
         # provider-specific JSON mode keeps more hosted models compatible.
         # bound response length and the cost of an individual answer.
         max_tokens=2500,
+        extra_body={"reasoning": {"enabled": False}},
     )
 
     raw_content = completion.choices[0].message.content
