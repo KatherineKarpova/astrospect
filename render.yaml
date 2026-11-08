@@ -9,7 +9,7 @@ services:
     runtime: python
     plan: starter
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate
-    startCommand: gunicorn config.wsgi:application
+    startCommand: gunicorn config.wsgi:application --timeout 90
     envVars:
       - key: DJANGO_DEBUG
         value: "False"
