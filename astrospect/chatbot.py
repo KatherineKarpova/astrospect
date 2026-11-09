@@ -311,48 +311,37 @@ def ask_chart_guide(
         extra_body={"reasoning": {"enabled": False}},
     )
 
-    raw_content = completion.choices[0].message.content
+    choice = completion.choices[0]
+    raw_content = choice.message.content
 
     if not raw_content:
-        raise ValueError("The model did not return an answer.")
+        logger.warning(
+            "Empty chat reply: finish_reason=%s usage=%s",
+            choice.finish_reason,
+            completion.usage,
+        )
+        raise ValueError("The AI did not return an answer. Please try again.")
 
-    reply = json.loads(raw_content)
+    reply = parse_model_json(raw_content)
+    if reply is None or not isinstance(reply.get("answer"), str):
+        logger.warning("Unparseable chat reply: %r", raw_content[:200])
+        reply = {"answer": raw_content.strip(), "reflection": "", "source_ids": []}
 
-    # json mode guarantees neither your expected fields nor their types.
-    # validate the response before passing it to your interface.
-    if not isinstance(reply, dict):
-        raise ValueError("Unexpected response format.")
-
-    if not isinstance(reply.get("answer"), str):
-        raise ValueError("The response is missing an answer.")
-
-    if not isinstance(reply.get("reflection"), str):
-        raise ValueError("The reflection has an invalid format.")
-
+    reply.setdefault("reflection", "")
+    if not isinstance(reply["reflection"], str):
+        reply["reflection"] = ""
     source_ids = reply.get("source_ids")
-
     if not isinstance(source_ids, list):
-        raise ValueError("The source references have an invalid format.")
+        source_ids = []
 
-    approved_sources = {
-        source["id"]: source
-        for source in SOURCES
-    }
-
-    # accept only ids from your own collection.
-    # the browser will receive your verified URLs, rather than
-    # URLs that the model generated.
-    if any(
-        not isinstance(source_id, str)
-        or source_id not in approved_sources
-        for source_id in source_ids
-    ):
-        raise ValueError("The response cited an unknown source.")
-
-    reply["sources"] = [
-        approved_sources[source_id]
-        for source_id in dict.fromkeys(source_ids)
+    # keep only ids from the app's own collection and drop anything invented
+    approved_sources = {source["id"]: source for source in SOURCES}
+    source_ids = [
+        source_id for source_id in source_ids
+        if isinstance(source_id, str) and source_id in approved_sources
     ]
+    reply["source_ids"] = source_ids
+    reply["sources"] = [approved_sources[s] for s in dict.fromkeys(source_ids)]
 
     return reply
 
@@ -514,3 +503,17 @@ def build_chart_context(
     # the model needs the calculated placements
     # it does not need the person's name or raw birth location
     return context
+
+def parse_model_json(raw):
+    """Return the first JSON object found in the reply, or None."""
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(raw):
+        if char != "{":
+            continue
+        try:
+            result, _ = decoder.raw_decode(raw[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(result, dict):
+            return result
+    return None
