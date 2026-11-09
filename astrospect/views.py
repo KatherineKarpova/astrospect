@@ -1,7 +1,6 @@
 import re
 import hashlib
 import json
-
 from django.conf import settings
 from django.http import Http404
 from django.shortcuts import render
@@ -23,6 +22,28 @@ from .chatbot import (
     ask_chart_guide,
     summarize_placement,
 )
+import logging
+
+logger = logging.getLogger(__name__)
+
+AI_UNAVAILABLE = "The AI assistant isn't available right now. Please try again later."
+
+
+def ai_configured():
+    return bool(settings.AI_API_KEY and settings.AI_BASE_URL and settings.AI_MODEL)
+
+
+def ai_error_response(exc):
+    if isinstance(exc, (APITimeoutError, APIConnectionError)):
+        logger.warning("AI connection problem: %r", exc)
+        message = "The AI took too long to respond. Please try again in a moment."
+    elif isinstance(exc, APIStatusError):
+        logger.warning("AI status error: %s", exc.status_code)
+        message = "The AI is busy right now. Please try again in a moment."
+    else:
+        logger.exception("Unexpected AI error")
+        message = AI_UNAVAILABLE
+    return JsonResponse({"error": message}, status=503)
 
 PLANET_SYMBOLS = {
     "Sun": "☉",
@@ -298,16 +319,8 @@ def chat(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST required."}, status=405)
 
-    if not settings.AI_API_KEY or not settings.AI_MODEL:
-        return JsonResponse(
-            {
-                "error": (
-                    "Hugging Face inference is not configured. Set HF_TOKEN "
-                    "and choose an HF_MODEL before enabling inference."
-                )
-            },
-            status=503,
-        )
+    if not ai_configured():
+        return JsonResponse({"error": AI_UNAVAILABLE}, status=503)
 
     _, chart_context = active_chart(request)
     if not chart_context:
@@ -326,22 +339,18 @@ def chat(request):
             request.POST.get("level", "auto"),
             request.POST.get("tone", "auto"),
         )
-    except (ValueError, OSError) as exc:
+    except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=503)
-    except (APIConnectionError, APITimeoutError, APIStatusError):
-        return JsonResponse(
-            {
-                "error": (
-                    "AI features are not configured right now."
-                    "Please try again later."
-                )
-            },
-            status=503,
-        )
+    except (APITimeoutError, APIConnectionError, APIStatusError, OSError) as exc:
+        return ai_error_response(exc)
 
     history.extend([
         {"role": "user", "content": question},
-        {"role": "assistant", "content": reply["answer"]},
+        {"role": "assistant", "content": json.dumps({
+            "answer": reply["answer"],
+            "reflection": reply.get("reflection", ""),
+            "source_ids": reply.get("source_ids", []),
+        })},
     ])
     request.session["chat_history"] = history[-16:]
     return JsonResponse(reply)
@@ -391,42 +400,14 @@ def placement_summary(request):
     if placement_key in summary_cache:
         return JsonResponse(summary_cache[placement_key])
 
-    if not settings.AI_API_KEY or not settings.AI_MODEL:
-        return JsonResponse(
-            {
-                "error": (
-                    "Hugging Face inference is not configured. Set HF_TOKEN "
-                    "and choose an HF_MODEL before enabling inference."
-                )
-            },
-            status=503,
-        )
-
+    if not ai_configured():
+        return JsonResponse({"error": AI_UNAVAILABLE}, status=503)
     try:
         result = summarize_placement(chart_context, placement)
-    except (ValueError, OSError) as exc:
+    except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=503)
-    except (APIConnectionError, APITimeoutError):
-        return JsonResponse(
-            {
-                "error": (
-                    "Hugging Face inference could not be reached. "
-                    "Check your connection and try again."
-                )
-            },
-            status=503,
-        )
-    except APIStatusError:
-        return JsonResponse(
-            {
-                "error": (
-                    "Hugging Face rejected the inference request. Check that "
-                    "HF_TOKEN has inference permission, your account has "
-                    "available credits, and HF_MODEL is available."
-                )
-            },
-            status=503,
-        )
+    except (APITimeoutError, APIConnectionError, APIStatusError, OSError) as exc:
+        return ai_error_response(exc)
 
     summary_cache[placement_key] = result
     if saved_chart:

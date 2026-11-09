@@ -55,11 +55,11 @@ class AIProviderTests(SimpleTestCase):
         self.assertEqual(chat_response.status_code, 503)
         self.assertEqual(summary_response.status_code, 503)
         self.assertIn(
-            "choose an HF_MODEL",
+            "isn't available right now",
             json.loads(chat_response.content)["error"],
         )
         self.assertIn(
-            "choose an HF_MODEL",
+            "isn't available right now",
             json.loads(summary_response.content)["error"],
         )
 
