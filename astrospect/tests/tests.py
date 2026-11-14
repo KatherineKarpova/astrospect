@@ -266,6 +266,78 @@ class TraditionalChartContextTests(TestCase):
         self.assertEqual(kwargs["tz_str"], "UTC")
         self.assertEqual((kwargs["lat"], kwargs["lng"]), (0, 0))
 
+    def test_selected_zodiac_and_house_system_are_sent_to_kerykeion(self):
+        with patch("astrospect.services.AstrologicalSubject") as subject_factory:
+            calculate_birth_chart(
+                {
+                    "birth_date": date(1961, 7, 1),
+                    "birth_time": time(19, 45),
+                    "latitude": 52.8278528,
+                    "longitude": 0.5059864,
+                    "zodiac_system": "sidereal",
+                    "house_system": "placidus",
+                },
+                "Europe/London",
+            )
+
+        kwargs = subject_factory.call_args.kwargs
+        self.assertEqual(kwargs["zodiac_type"], "Sidereal")
+        self.assertEqual(kwargs["sidereal_mode"], "LAHIRI")
+        self.assertEqual(kwargs["houses_system_identifier"], "P")
+
+    def test_placidus_context_uses_calculated_house_cusps_and_assignments(self):
+        house_names = (
+            "first_house", "second_house", "third_house", "fourth_house",
+            "fifth_house", "sixth_house", "seventh_house", "eighth_house",
+            "ninth_house", "tenth_house", "eleventh_house", "twelfth_house",
+        )
+        chart_points = {
+            "ascendant": SimpleNamespace(
+                sign_num=0, position=12.5, house="First_House",
+            ),
+            "descendant": SimpleNamespace(
+                sign_num=6, position=12.5, house="Seventh_House",
+            ),
+            "medium_coeli": SimpleNamespace(
+                sign_num=9, position=12.5, house="Tenth_House",
+            ),
+            "imum_coeli": SimpleNamespace(
+                sign_num=3, position=12.5, house="Fourth_House",
+            ),
+        }
+        chart_points.update({
+            name: SimpleNamespace(
+                sign_num=0, position=12.5, retrograde=False,
+                house="Tenth_House",
+            )
+            for name in (
+                "sun", "moon", "mercury", "venus",
+                "mars", "jupiter", "saturn",
+            )
+        })
+        chart_points.update({
+            house_name: SimpleNamespace(
+                sign_num=8 if house_name == "tenth_house" else index,
+            )
+            for index, house_name in enumerate(house_names)
+        })
+
+        context = build_chart_context(
+            SimpleNamespace(**chart_points),
+            has_birth_time=True,
+            has_birth_location=True,
+            zodiac_system="sidereal",
+            house_system="placidus",
+            ayanamsa="lahiri",
+        )
+        sun = next(planet for planet in context["planets"] if planet["name"] == "Sun")
+
+        self.assertEqual(context["zodiac"], "sidereal")
+        self.assertEqual(context["ayanamsa"], "lahiri")
+        self.assertEqual(context["houses"][9]["sign"], "Sagittarius")
+        self.assertEqual(sun["house"], 10)
+        self.assertEqual(sun["house_sign"], "Sagittarius")
+
     def test_ascendant_sets_the_whole_sign_house_sequence(self):
         chart = SimpleNamespace(
             ascendant=SimpleNamespace(sign_num=8, position=12.5),
@@ -397,7 +469,11 @@ class TraditionalChartContextTests(TestCase):
 
         with patch("astrospect.chatbot.OpenAI", return_value=client):
             result = summarize_placement(
-                {"zodiac": "tropical", "house_system": "whole_sign"},
+                {
+                    "zodiac": "sidereal",
+                    "house_system": "placidus",
+                    "ayanamsa": "lahiri",
+                },
                 placement,
             )
 
@@ -405,6 +481,9 @@ class TraditionalChartContextTests(TestCase):
         self.assertIn('"Moon"', supplied_facts)
         self.assertIn('"Gemini"', supplied_facts)
         self.assertIn('"house": 7', supplied_facts)
+        self.assertIn('"zodiac": "sidereal"', supplied_facts)
+        self.assertIn('"house_system": "placidus"', supplied_facts)
+        self.assertIn('"ayanamsa": "lahiri"', supplied_facts)
         self.assertIn("partnerships and agreements", supplied_facts)
         self.assertIn('"essential_dignity": []', supplied_facts)
         self.assertEqual(
@@ -421,7 +500,7 @@ class TraditionalChartContextTests(TestCase):
         self.assertIn("NOT the Ascendant", kwargs["messages"][0]["content"])
         self.assertNotIn('"ascendant"', supplied_facts)
 
-    def test_ascendant_summary_receives_lagna_and_house_sequence_instructions(self):
+    def test_ascendant_summary_receives_lagna_and_method_house_facts(self):
         client = MagicMock()
         client.chat.completions.create.return_value.choices = [
             MagicMock(message=MagicMock(
@@ -432,7 +511,7 @@ class TraditionalChartContextTests(TestCase):
             "zodiac": "tropical",
             "house_system": "whole_sign",
             "ascendant": {"sign": "Sagittarius"},
-            "whole_sign_houses": [
+            "houses": [
                 {"house": 1, "sign": "Sagittarius"},
                 {"house": 2, "sign": "Capricorn"},
             ],
@@ -446,8 +525,9 @@ class TraditionalChartContextTests(TestCase):
 
         messages = client.chat.completions.create.call_args.kwargs["messages"]
         self.assertIn("first impression", messages[0]["content"])
-        self.assertIn("sets the sign", messages[0]["content"])
+        self.assertIn("supplied house system", messages[0]["content"])
         self.assertIn('"Sagittarius"', messages[1]["content"])
+        self.assertIn('"houses": [{"house": 1', messages[1]["content"])
         self.assertIn("Sagittarius", result["summary"])
         self.assertIn("Ascendant", result["summary"])
 
@@ -552,6 +632,74 @@ class ChartPagePlacementTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertTrue(form.cleaned_data["needs_location_lookup"])
 
+    @patch("astrospect.views.generate_chart_svg", return_value="<svg></svg>")
+    @patch("astrospect.views.build_chart_context", return_value={
+        "zodiac": "sidereal",
+        "house_system": "placidus",
+        "ayanamsa": "lahiri",
+        "birth_location_known": True,
+        "house_data_available": True,
+        "planets": [{
+            "name": "Sun",
+            "sign": "Gemini",
+            "degree": 16.35,
+            "house": 7,
+            "house_sign": "Taurus",
+            "house_topic": "partnerships and agreements",
+            "essential_dignity": [],
+        }],
+        "angles": [],
+    })
+    @patch("astrospect.views.calculate_birth_chart", return_value=object())
+    def test_selected_methods_are_used_and_displayed(
+        self,
+        calculate_chart,
+        build_context,
+        render_svg,
+    ):
+        response = self.client.post("/chart/", {
+            "name": "Princess Diana Frances Spencer",
+            "birth_month": "7",
+            "birth_day": "1",
+            "birth_year": "1961",
+            "birth_time": "19:45",
+            "birthplace": "Park House, Sandringham, Norfolk, England",
+            "location_id": "sample-park-house",
+            "latitude": "52.8278528",
+            "longitude": "0.5059864",
+            "birth_timezone": "Europe/London",
+            "zodiac_system": "sidereal",
+            "house_system": "placidus",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            calculate_chart.call_args.args[0]["zodiac_system"],
+            "sidereal",
+        )
+        self.assertEqual(
+            calculate_chart.call_args.args[0]["house_system"],
+            "placidus",
+        )
+        build_context.assert_called_once_with(
+            calculate_chart.return_value,
+            True,
+            True,
+            {},
+            zodiac_system="sidereal",
+            house_system="placidus",
+            ayanamsa="lahiri",
+        )
+        self.assertContains(response, "Sidereal (Lahiri)")
+        self.assertContains(response, "Placidus")
+        self.assertContains(response, "Placidus house 7 · Taurus")
+        self.assertContains(response, "Princess Diana Frances Spencer")
+        self.assertContains(response, "19:45 BST")
+        self.assertContains(
+            response,
+            "The chart guide uses your selected Sidereal (Lahiri) zodiac and Placidus houses",
+        )
+
     @patch("astrospect.services.urlopen")
     def test_server_birthplace_lookup_resolves_coordinates_and_timezone(self, open_url):
         response = MagicMock()
@@ -649,6 +797,9 @@ class ChartPagePlacementTests(TestCase):
             True,
             False,
             {"Moon": ["Gemini", "Cancer"]},
+            zodiac_system="tropical",
+            house_system="whole_sign",
+            ayanamsa=None,
         )
         render_svg.assert_called_once_with(
             calculate_chart.return_value,
@@ -728,7 +879,7 @@ class ChartPagePlacementTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Sun in Virgo")
-        self.assertContains(response, "House 10")
+        self.assertContains(response, "Whole-sign house 10 · Capricorn")
         self.assertContains(response, "Exalted")
         self.assertContains(response, "1st House")
         self.assertContains(response, "Birth time received: 13:05")

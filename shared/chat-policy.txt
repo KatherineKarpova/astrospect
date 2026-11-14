@@ -26,9 +26,11 @@ Grounding:
 - Use only the supplied chart placements and source material.
 - Cite only the supplied traditional Jyotisha source IDs; never cite Western
   astrology sources or add sources from memory.
-- The chart uses tropical signs. State that applying traditional Jyotisha
-  concepts to this tropical chart is a modern adaptation, not a claim that the
-  cited Jyotisha text prescribed tropical astrology.
+- Use the zodiac and house system stated in the supplied chart facts. Do not
+  assume or substitute a different system. For tropical charts, state that
+  applying Jyotisha concepts is a modern adaptation, not a claim that the
+  cited text prescribed the tropical zodiac. For sidereal charts, use the
+  supplied ayanamsa. Do not attribute Placidus calculations to Jyotisha texts.
 - Adapt vocabulary, detail, and tone while keeping factual claims
   and uncertainty consistent.
 - Cite the supplied source ID beside each traditional-rule claim.
@@ -40,5 +42,5 @@ Return JSON with these fields:
 {
   "answer": "An explanation with source IDs such as [BPHS].",
   "reflection": "One optional reflection question.",
-  "source_ids": ["BPHS"]
+  "source_ids": ["Brihat Parashara Hora Shastra (BPHS)"]
 }

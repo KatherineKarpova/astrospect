@@ -1,6 +1,9 @@
 import re
 import hashlib
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from django.conf import settings
 from django.http import Http404
 from django.shortcuts import render
@@ -62,11 +65,13 @@ ANGLE_LABELS = {
     "Imum_Coeli": "IC · Imum Coeli",
 }
 
-PLACEMENT_SUMMARY_VERSION = 7
+PLACEMENT_SUMMARY_VERSION = 8
 
 
 def chart_display_context(chart_context, chart_svg, has_birth_time):
     has_birth_location = chart_context.get("birth_location_known", False)
+    zodiac_system = chart_context.get("zodiac", "tropical")
+    house_system = chart_context.get("house_system", "whole_sign")
     has_house_data = chart_context.get(
         "house_data_available",
         has_birth_time and has_birth_location,
@@ -76,6 +81,17 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
         'has_birth_time': has_birth_time,
         'has_birth_location': has_birth_location,
         'has_house_data': has_house_data,
+        'chart_zodiac': zodiac_system,
+        'chart_zodiac_label': (
+            "Sidereal (Lahiri)"
+            if zodiac_system == "sidereal"
+            else "Tropical"
+        ),
+        'chart_house_system': house_system,
+        'chart_house_system_label': (
+            "Whole sign" if house_system == "whole_sign" else "Placidus"
+        ),
+        'chart_ayanamsa': chart_context.get("ayanamsa"),
         'birth_time_note': (
             (
                 f"Birth time received: {chart_context['birth_time_display']} "
@@ -103,7 +119,7 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
             else ""
         ),
         'daily_sign_change_note': (
-            "A planet marked below changed tropical signs during this UTC "
+            f"A planet marked below changed {zodiac_system} signs during this UTC "
             "calendar date. Without a birthplace and time zone, its exact "
             "birth sign cannot be confirmed."
             if chart_context.get("daily_sign_changes")
@@ -118,7 +134,13 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
                 'key': planet['name'].lower(),
                 'symbol': PLANET_SYMBOLS[planet['name']],
                 'house_brief': (
-                    f"House {planet['house']}"
+                    f"{'Whole-sign' if house_system == 'whole_sign' else 'Placidus'} "
+                    f"house {planet['house']}"
+                    + (
+                        f" · {planet['house_sign']}"
+                        if planet.get("house_sign")
+                        else ""
+                    )
                     if planet['house']
                     else ""
                 ),
@@ -138,7 +160,8 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
                 'key': angle['name'].lower(),
                 'label': ANGLE_LABELS[angle['name']],
                 'house_brief': (
-                    f"Whole-sign house {angle['house']} · "
+                    f"{'Whole-sign' if house_system == 'whole_sign' else 'Placidus'} "
+                    f"house {angle['house']} · "
                     f"{angle['house_topic'].capitalize()} "
                     f"({angle['house_sign']})"
                 ),
@@ -197,16 +220,25 @@ def chart(request):
                 data.get('birth_timezone') or "UTC",
             )
 
+            zodiac_system = data["zodiac_system"]
+            ayanamsa = "lahiri" if zodiac_system == "sidereal" else None
             chart_context = build_chart_context(
                 chart,
                 has_birth_time,
                 has_birth_location,
                 daily_sign_changes,
+                zodiac_system=zodiac_system,
+                house_system=data["house_system"],
+                ayanamsa=ayanamsa,
             )
             if data["birth_time"]:
-                chart_context["birth_time_display"] = data["birth_time"].strftime(
-                    "%H:%M"
-                )
+                timezone_name = data.get("birth_timezone") or "UTC"
+                chart_context["birth_time_display"] = datetime.combine(
+                    data["birth_date"],
+                    data["birth_time"],
+                ).replace(
+                    tzinfo=ZoneInfo(timezone_name)
+                ).strftime("%H:%M %Z")
             request.session["chart_context"] = chart_context
             chart_svg = generate_chart_svg(
                 chart,
@@ -229,6 +261,7 @@ def chart(request):
                         chart_svg,
                         has_birth_time,
                     ),
+                    "chart_name": data.get("name") or "Your Birth Chart",
                     "browser_cache_enabled": request.session[
                         "browser_cache_enabled"
                     ],

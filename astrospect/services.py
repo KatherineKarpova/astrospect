@@ -118,11 +118,16 @@ def resolve_birthplace(query):
 
 
 def calculate_birth_chart(data, timezone_name):
-    # create a Kerykeion astrological subject from validated birth data
-
     birth_date = data["birth_date"]
     birth_time = data["birth_time"]
     has_birth_location = data.get("has_birth_location", True)
+    zodiac_system = data.get("zodiac_system", "tropical")
+    house_system = data.get("house_system", "whole_sign")
+
+    zodiac_types = {"tropical": "Tropic", "sidereal": "Sidereal"}
+    house_systems = {"whole_sign": "W", "placidus": "P"}
+    if zodiac_system not in zodiac_types or house_system not in house_systems:
+        raise ValueError("Choose a supported zodiac and house system.")
 
     if not has_birth_location:
         birth_time = data.get("birth_time")
@@ -142,58 +147,61 @@ def calculate_birth_chart(data, timezone_name):
         latitude = data["latitude"]
         longitude = data["longitude"]
 
-    # this function creates the chart Kerykeion object from the validated form data 
-    return AstrologicalSubject(
-        name=data.get("name") or "Your Chart",
-        year=birth_date.year,
-        month=birth_date.month,
-        day=birth_date.day,
-        hour=hour,
-        minute=minute,
-        lat=latitude,
-        lng=longitude,
-        tz_str=timezone_name,
-        online=False,
-        zodiac_type="Tropic",
-        houses_system_identifier="W",
-    )
+    chart_options = {
+        "name": data.get("name") or "Your Chart",
+        "year": birth_date.year,
+        "month": birth_date.month,
+        "day": birth_date.day,
+        "hour": hour,
+        "minute": minute,
+        "lat": latitude,
+        "lng": longitude,
+        "tz_str": timezone_name,
+        "online": False,
+        "zodiac_type": zodiac_types[zodiac_system],
+        "houses_system_identifier": house_systems[house_system],
+    }
+    if zodiac_system == "sidereal":
+        chart_options["sidereal_mode"] = "LAHIRI"
+
+    return AstrologicalSubject(**chart_options)
 
 
 def calculate_daily_sign_changes(data):
-    """Return planets whose tropical signs differ across the UTC birth date."""
+    """Return planets whose selected zodiac signs differ across the UTC date."""
     birth_date = data["birth_date"]
+    zodiac_type = (
+        "Sidereal" if data.get("zodiac_system") == "sidereal" else "Tropic"
+    )
+    chart_options = {
+        "name": "Daily Sign Check",
+        "year": birth_date.year,
+        "month": birth_date.month,
+        "day": birth_date.day,
+        "lat": 0,
+        "lng": 0,
+        "tz_str": "UTC",
+        "online": False,
+        "zodiac_type": zodiac_type,
+        "houses_system_identifier": "W",
+    }
+    if zodiac_type == "Sidereal":
+        chart_options["sidereal_mode"] = "LAHIRI"
+
     sign_names = (
         "Aries", "Taurus", "Gemini", "Cancer",
         "Leo", "Virgo", "Libra", "Scorpio",
         "Sagittarius", "Capricorn", "Aquarius", "Pisces",
     )
     day_start = AstrologicalSubject(
-        name="Daily Sign Check",
-        year=birth_date.year,
-        month=birth_date.month,
-        day=birth_date.day,
+        **chart_options,
         hour=0,
         minute=0,
-        lat=0,
-        lng=0,
-        tz_str="UTC",
-        online=False,
-        zodiac_type="Tropic",
-        houses_system_identifier="W",
     )
     day_end = AstrologicalSubject(
-        name="Daily Sign Check",
-        year=birth_date.year,
-        month=birth_date.month,
-        day=birth_date.day,
+        **chart_options,
         hour=23,
         minute=59,
-        lat=0,
-        lng=0,
-        tz_str="UTC",
-        online=False,
-        zodiac_type="Tropic",
-        houses_system_identifier="W",
     )
     planet_names = ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn")
     changed_signs = {}

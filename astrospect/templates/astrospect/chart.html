@@ -8,16 +8,16 @@
 
     <link rel="stylesheet" href="{% static 'astrospect/style.css' %}">
 
-    <title>Your Birth Chart</title>
+    <title>{{ chart_name|default:"Your Birth Chart" }}</title>
     
 </head>
 
     <body class="site-shell">
         <main class="page-wrap chart-page">
             <header class="page-heading">
-                <p class="eyebrow">Your tropical · whole-sign chart</p>
-                <h1>Your Birth Chart</h1>
-                <p>Explore each placement at your own pace. Select a line for a plain-language guide to its sign and, when available, its whole-sign house.</p>
+                <p class="eyebrow">{{ chart_zodiac_label }} · {{ chart_house_system_label }} chart</p>
+                <h1>{{ chart_name|default:"Your Birth Chart" }}</h1>
+                <p>Explore each placement at your own pace. Select a line for a plain-language guide to its sign and, when available, its house.</p>
             </header>
 
             {% if location_note %}
@@ -38,9 +38,9 @@
                     <p class="eyebrow">The chart frame</p>
                     <h2>A traditional lens</h2>
                     <h3>Zodiac</h3>
-                    <p>Tropical</p>
+                    <p>{{ chart_zodiac_label }}{% if chart_ayanamsa %} ({{ chart_ayanamsa|title }}){% endif %}</p>
                     <h3>Houses</h3>
-                    <p>{% if has_house_data %}Whole sign, counted from the Ascendant.{% else %}Not shown because birthplace and birth time are both needed.{% endif %}</p>
+                    <p>{% if has_house_data %}{{ chart_house_system_label }}.{% else %}Not shown because birthplace and birth time are both needed.{% endif %}</p>
                     <h3>Planets</h3>
                     <p>The seven traditional planets</p>
                 </aside>
@@ -54,7 +54,7 @@
                 <div class="section-heading">
                     <p class="eyebrow">The seven traditional planets</p>
                     <h2>Planet placements</h2>
-                    <p class="section-intro">The sign describes traditional dignity; a whole-sign house, when available, describes where a planet’s topics unfold and whether its position is angular.</p>
+                    <p class="section-intro">The selected zodiac determines each sign; {{ chart_house_system_label|lower }} houses, when available, describe where a planet’s topics unfold.</p>
                     {% if not has_house_data and has_birth_time %}
                     <p class="placement-note">{% if has_birth_location %}Houses and angles are unavailable because the birth time was not provided.{% else %}Houses and angles require a birthplace as well as a birth time.{% endif %}</p>
                     {% endif %}
@@ -119,7 +119,7 @@
             {{ chart_cache_key|json_script:"chart-cache-key" }}
             <script>
                 (() => {
-                    const key = "vedic-chart-summaries-v1-" +
+                    const key = "vedic-chart-summaries-v2-" +
                         JSON.parse(document.getElementById("chart-cache-key").textContent);
                     const cacheEnabled = {{ browser_cache_enabled|yesno:"true,false" }};
                     if (cacheEnabled) {
@@ -161,7 +161,7 @@
             {% if chat_enabled %}
             <section class="chat">
                 <h2>Ask the chart guide</h2>
-                <p class="section-intro">Grounded in your chart facts and traditional Jyotisha texts, adapted to this tropical chart with room for your own reflection.</p>
+                <p class="section-intro">The chart guide uses your selected {{ chart_zodiac_label }} zodiac and {{ chart_house_system_label }} houses when available, alongside traditional Jyotisha texts.</p>
                 <div id="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
                 <form id="chat-form" action="{% url 'astrology:chat' %}" method="post">
                     {% csrf_token %}
@@ -294,7 +294,7 @@
             })
         </script>
         <footer class="source-note">
-            <p>Traditional source: <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.title }}</a>. Its Jyotisha concepts are applied here to tropical placements as a modern adaptation; the text did not prescribe tropical astrology.</p>
+            <p>Traditional source: <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.title }}</a>. {% if chart_zodiac == "tropical" %}Applying its Jyotisha concepts to tropical placements is a modern adaptation; the text did not prescribe tropical astrology.{% endif %}{% if chart_house_system == "placidus" %} Placidus house assignments are a calculation choice, not a claim from this text.{% endif %}</p>
         </footer>
     </body>
 </html>
