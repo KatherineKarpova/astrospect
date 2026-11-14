@@ -13,7 +13,7 @@
         <header class="page-heading">
             <p class="eyebrow">Astrology as a psychological framework for introspection.</p>
             <h1>Explore your birth chart</h1>
-            <p>Discover your tropical, whole-sign chart and reflect on its traditional symbolism.</p>
+            <p>Explore your chart using the selected zodiac and house system, then reflect on its traditional symbolism.</p>
         </header>
         <section class="form-card">
             <form action="{% url 'astrology:chart' %}" method="post">
@@ -130,6 +130,9 @@
                 <button id="clear-saved-chart" class="button-secondary" type="button" hidden>
                     Clear chart saved in this browser
                 </button>
+                <button id="sample-chart" class="button-secondary sample-chart-button" type="button">
+                    Try a sample chart
+                </button>
                 <button type="submit">Generate my birth chart</button>
             </form>
         </div>
@@ -145,6 +148,7 @@
                 const saveOption = document.getElementById("save-to-browser");
                 const restoreButton = document.getElementById("restore-saved-chart");
                 const status = document.getElementById("browser-cache-status");
+                const sampleButton = document.getElementById("sample-chart");
                 let cachedDetails = null;
 
                 try {
@@ -168,6 +172,33 @@
                 } catch (error) {
                     status.textContent = "Browser storage is unavailable here.";
                 }
+
+                // use the iana timezone so historical bst is applied to the sample time.
+                sampleButton.addEventListener("click", () => {
+                    const sample = {
+                        name: "Princess Diana Frances Spencer",
+                        birth_month: "7",
+                        birth_day: "1",
+                        birth_year: "1961",
+                        birth_time: "19:45",
+                        birthplace: "Park House, Sandringham, Norfolk, England",
+                        location_id: "sample-park-house",
+                        latitude: "52.8278528",
+                        longitude: "0.5059864",
+                        birth_timezone: "Europe/London",
+                        zodiac_system: "sidereal",
+                        house_system: "placidus"
+                    }
+                    for (const [field, value] of Object.entries(sample)) {
+                        form.elements.namedItem(field).value = value
+                    }
+                    const locationInput = document.querySelector(
+                        "#birthplace-autocomplete .geoapify-autocomplete-input"
+                    ) || document.getElementById("birthplace-manual")
+                    if (locationInput) locationInput.value = sample.birthplace
+                    saveOption.checked = false
+                    form.requestSubmit()
+                })
 
                 form.addEventListener("submit", () => {
                     if (!saveOption.checked) return;

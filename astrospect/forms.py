@@ -24,6 +24,29 @@ class BirthChartForm(forms.Form):
 
     birth_timezone = forms.CharField(max_length=100, required=False)
 
+    zodiac_system = forms.ChoiceField(
+        choices=[
+            ("tropical", "Tropical"),
+            ("sidereal", "Sidereal"),
+        ],
+        required=False,
+        initial="tropical",
+    )
+    house_system = forms.ChoiceField(
+        choices=[
+            ("whole_sign", "Whole sign"),
+            ("placidus", "Placidus"),
+        ],
+        required=False,
+        initial="whole_sign",
+    )
+
+    def clean_zodiac_system(self):
+        return self.cleaned_data.get("zodiac_system") or "tropical"
+
+    def clean_house_system(self):
+        return self.cleaned_data.get("house_system") or "whole_sign"
+
     # check if time zone is in a recognized zone
     def clean_birth_timezone(self):
         timezone_name = self.cleaned_data.get("birth_timezone", "")
