@@ -4,6 +4,7 @@ import os
 import sys
 
 
+# load Django's command-line runner and pass it the user's arguments.
 def main():
     """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')

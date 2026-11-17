@@ -21,5 +21,6 @@ SIGN_NAMES = {
 
 
 @register.filter
+# expand the abbreviated zodiac sign used in chart data.
 def full_sign(sign):
     return SIGN_NAMES.get(sign, sign)

@@ -31,6 +31,7 @@ class BirthplaceLookupError(ValueError):
     """Raised when a typed birthplace cannot be resolved to chart coordinates."""
 
 
+# look up a typed birthplace and validate its coordinates and time zone.
 def resolve_birthplace(query):
     if not settings.GEOAPIFY_API_KEY:
         raise BirthplaceLookupError(
@@ -117,6 +118,7 @@ def resolve_birthplace(query):
     }
 
 
+# calculate chart placements with the selected zodiac and house methods.
 def calculate_birth_chart(data, timezone_name):
     birth_date = data["birth_date"]
     birth_time = data["birth_time"]
@@ -167,6 +169,7 @@ def calculate_birth_chart(data, timezone_name):
     return AstrologicalSubject(**chart_options)
 
 
+# find planets that cross a sign boundary during the birth date.
 def calculate_daily_sign_changes(data):
     """Return planets whose selected zodiac signs differ across the UTC date."""
     birth_date = data["birth_date"]
@@ -212,7 +215,7 @@ def calculate_daily_sign_changes(data):
             changed_signs[name] = [start_sign, end_sign]
     return changed_signs
 
-# this function manipulates the svg string created form 
+# render the chart wheel and apply the app's display styling.
 def generate_chart_svg(chart, show_houses=True):
     # traditional active points excludes uranus, neptune, pluto, chiron, and lilith
     # takes the astrological subject object and creates a chart data object specifically to render
@@ -273,6 +276,7 @@ def generate_chart_svg(chart, show_houses=True):
         r"(<g kr:node='ChartPoint'[^>]*kr:sign='([A-Za-z]+)'[^>]*)(>)"
     )
 
+    # color each chart point according to its zodiac sign element.
     def color_chart_point(match):
         sign_index = {
             "Ari": 0, "Tau": 1, "Gem": 2, "Can": 3,
@@ -294,6 +298,7 @@ def generate_chart_svg(chart, show_houses=True):
             r"<g kr:node='HouseNumber'><text[^>]*><tspan "
             r"x='([^']+)' y='([^']+)'>(\d{1,2})</tspan></text></g>"
         )
+        # restyle the house numbers for clear contrast.
         svg = house_number_pattern.sub(
             lambda match: (
                 f"<g kr:node='HouseNumber'><text "
@@ -310,7 +315,7 @@ def generate_chart_svg(chart, show_houses=True):
     return svg
 
 
-# this function removes the houses visibility from the wheel for when birth time is unknown
+# remove house details when the birth time is unknown.
 def remove_houses_from_svg(svg):
     houses_start = svg.find('<!-- Houses -->')
     planets_start = svg.find('<!-- Planets -->')

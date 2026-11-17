@@ -32,10 +32,12 @@ logger = logging.getLogger(__name__)
 AI_UNAVAILABLE = "The AI assistant isn't available right now. Please try again later."
 
 
+# check whether all required ai service settings are present.
 def ai_configured():
     return bool(settings.AI_API_KEY and settings.AI_BASE_URL and settings.AI_MODEL)
 
 
+# translate ai provider failures into safe user-facing messages.
 def ai_error_response(exc):
     if isinstance(exc, (APITimeoutError, APIConnectionError)):
         logger.warning("AI connection problem: %r", exc)
@@ -68,6 +70,7 @@ ANGLE_LABELS = {
 PLACEMENT_SUMMARY_VERSION = 8
 
 
+# prepare the labels and placement details shown on the chart page.
 def chart_display_context(chart_context, chart_svg, has_birth_time):
     has_birth_location = chart_context.get("birth_location_known", False)
     zodiac_system = chart_context.get("zodiac", "tropical")
@@ -76,6 +79,16 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
         "house_data_available",
         has_birth_time and has_birth_location,
     )
+
+    # format a house number with its topic and sign.
+    def format_house_brief(placement):
+        house = placement.get("house")
+        topic = placement.get("house_topic")
+        house_sign = placement.get("house_sign")
+        if not house or not topic or not house_sign:
+            return ""
+        return f"House {house} · {topic.capitalize()} ({house_sign})"
+
     return {
         'chart_svg': chart_svg,
         'has_birth_time': has_birth_time,
@@ -133,17 +146,7 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
                 **planet,
                 'key': planet['name'].lower(),
                 'symbol': PLANET_SYMBOLS[planet['name']],
-                'house_brief': (
-                    f"{'Whole-sign' if house_system == 'whole_sign' else 'Placidus'} "
-                    f"house {planet['house']}"
-                    + (
-                        f" · {planet['house_sign']}"
-                        if planet.get("house_sign")
-                        else ""
-                    )
-                    if planet['house']
-                    else ""
-                ),
+                'house_brief': format_house_brief(planet),
                 'possible_sign_change': planet.get("possible_sign_change", []),
                 'dignity_label': (
                     'Exalted' if 'exalted' in planet['essential_dignity']
@@ -159,18 +162,14 @@ def chart_display_context(chart_context, chart_svg, has_birth_time):
                 **angle,
                 'key': angle['name'].lower(),
                 'label': ANGLE_LABELS[angle['name']],
-                'house_brief': (
-                    f"{'Whole-sign' if house_system == 'whole_sign' else 'Placidus'} "
-                    f"house {angle['house']} · "
-                    f"{angle['house_topic'].capitalize()} "
-                    f"({angle['house_sign']})"
-                ),
+                'house_brief': format_house_brief(angle),
             }
             for angle in chart_context['angles']
         ],
     }
 
 
+# load the active chart from a saved record or the current session.
 def active_chart(request):
     saved_chart_id = request.session.get("saved_chart_id")
     if saved_chart_id:
@@ -182,13 +181,14 @@ def active_chart(request):
     return None, request.session.get("chart_context")
 
 
-# display the birth chart form and calculate after valid submission
+# show the form used to enter birth chart details.
 def index(request):
     
     return render(request, 'astrospect/index.html',{
         'geoapify_api_key': settings.GEOAPIFY_API_KEY,
         })
 
+# validate chart input, calculate placements, and render the result.
 def chart(request):
     if request.method == 'POST':
         form = BirthChartForm(request.POST)
@@ -297,6 +297,7 @@ def chart(request):
             })
 
 
+# load a private chart using its unguessable access token.
 def saved_chart(request, token):
     if not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):
             raise Http404
@@ -328,6 +329,7 @@ def saved_chart(request, token):
     return response
 
 
+# delete a saved chart and clear its active session references.
 def delete_saved_chart(request, token):
     if request.method != "POST":
         return JsonResponse({"error": "POST required."}, status=405)
@@ -344,6 +346,7 @@ def delete_saved_chart(request, token):
     return redirect("astrology:index")
 
 
+# answer a chart question and retain a short conversation history.
 def chat(request):
     """todo:
     keep the conversation history sent to OpenRouter bounded, and translate
@@ -389,6 +392,7 @@ def chat(request):
     return JsonResponse(reply)
 
 
+# return a cached or newly generated summary for a chart placement.
 def placement_summary(request):
     """todo:
     validate that the requested placement belongs to the active chart and

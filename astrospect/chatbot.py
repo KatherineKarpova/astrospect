@@ -87,6 +87,7 @@ JSON, quotation marks around the response, markdown fences, citations, or
 source IDs."""
 
 
+# build a local placement summary when the model response is unusable.
 def _placement_summary_fallback(placement, chart_context):
     name = placement["name"]
     sign = placement["sign"]
@@ -145,6 +146,7 @@ def _placement_summary_fallback(placement, chart_context):
     return " ".join(sentences)
 
 
+# request and validate a method-aware explanation for one placement.
 def summarize_placement(chart_context, placement):
     """todo:
     send only the selected placement and its calculation methods to the hosted
@@ -243,6 +245,7 @@ def summarize_placement(chart_context, placement):
     }
 
 
+# send a chart question with bounded history and approved sources.
 def ask_chart_guide(
     chart_context,
     question,
@@ -348,7 +351,7 @@ def ask_chart_guide(
 
     return reply
 
-# provide json dicts for llm to have context for responses
+# convert calculated placements into facts for summaries and chart guidance.
 def build_chart_context(
     chart,
     has_birth_time,
@@ -536,6 +539,7 @@ def build_chart_context(
     # it does not need the person's name or raw birth location
     return context
 
+# extract the first valid json object from a model response.
 def parse_model_json(raw):
     """Return the first JSON object found in the reply, or None."""
     decoder = json.JSONDecoder()
