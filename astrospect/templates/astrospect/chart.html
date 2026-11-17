@@ -17,7 +17,8 @@
             <header class="page-heading">
                 <p class="eyebrow">{{ chart_zodiac_label }} · {{ chart_house_system_label }} chart</p>
                 <h1>{{ chart_name|default:"Your Birth Chart" }}</h1>
-                <p>Explore each placement at your own pace. Select a line for a plain-language guide to its sign and, when available, its house.</p>
+                <p>Tap a placement and see what it might spark for you. Think of astrology as a fun lens for self-reflection, not science or fact.</p>
+                {% if chat_enabled %}<a class="text-link" href="#chart-guide">Curious what else your chart might bring up? Ask the chart guide ↓</a>{% endif %}
             </header>
 
             {% if location_note %}
@@ -38,7 +39,7 @@
                     <p class="eyebrow">The chart frame</p>
                     <h2>A traditional lens</h2>
                     <h3>Zodiac</h3>
-                    <p>{{ chart_zodiac_label }}{% if chart_ayanamsa %} ({{ chart_ayanamsa|title }}){% endif %}</p>
+                    <p>{{ chart_zodiac_label }}</p>
                     <h3>Houses</h3>
                     <p>{% if has_house_data %}{{ chart_house_system_label }}.{% else %}Not shown because birthplace and birth time are both needed.{% endif %}</p>
                     <h3>Planets</h3>
@@ -118,11 +119,13 @@
             <form id="summary-csrf-form" hidden>{% csrf_token %}</form>
             {{ chart_cache_key|json_script:"chart-cache-key" }}
             <script>
+                // provide versioned, optional local storage for placement summaries.
                 (() => {
                     const key = "vedic-chart-summaries-v2-" +
                         JSON.parse(document.getElementById("chart-cache-key").textContent);
                     const cacheEnabled = {{ browser_cache_enabled|yesno:"true,false" }};
                     if (cacheEnabled) {
+                        // clear both saved form details and their chart summaries.
                         document.getElementById("clear-browser-chart")?.addEventListener("click", () => {
                             try {
                                 localStorage.removeItem("vedic-chart-form-v1");
@@ -138,6 +141,7 @@
                     window.placementSummaryCache = {
                         key,
                         enabled: cacheEnabled,
+                        // read cached summaries when browser storage is enabled.
                         read() {
                             if (!this.enabled) return {};
                             try {
@@ -147,9 +151,11 @@
                                 return {};
                             }
                         },
+                        // save summaries only for charts opted into browser storage.
                         write(cache) {
                             if (!this.enabled) return;
                             try {
+                                // this cache contains placement summaries, not birth details.
                                 localStorage.setItem(this.key, JSON.stringify(cache));
                             } catch (error) {
                                 console.warn("Could not cache placement summaries in this browser.", error);
@@ -159,7 +165,7 @@
                 })();
             </script>
             {% if chat_enabled %}
-            <section class="chat">
+            <section class="chat" id="chart-guide">
                 <h2>Ask the chart guide</h2>
                 <p class="section-intro">The chart guide uses your selected {{ chart_zodiac_label }} zodiac and {{ chart_house_system_label }} houses when available, alongside traditional Jyotisha texts.</p>
                 <div id="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
@@ -190,8 +196,7 @@
             const form = document.getElementById("chat-form")
             const log = document.getElementById("chat-log")
             const questionField = document.getElementById("chat-question")
-            // textContent avoids interpreting user or model text as markup,
-            // while the role class gives each side a distinct bubble style.
+            // add chat text safely and keep the latest message in view.
             const appendBubble = (role, content, isError = false) => {
                 const bubble = document.createElement("p")
                 bubble.className = `chat-bubble chat-bubble-${role}` +
@@ -200,6 +205,7 @@
                 log.appendChild(bubble)
                 log.scrollTop = log.scrollHeight
             }
+            // send the question and show the response or a useful error.
             form.addEventListener("submit", async (event) => {
                 event.preventDefault()
                 const button = form.querySelector("button")
@@ -233,6 +239,7 @@
                 }
             })
 
+            // submit on enter while preserving shift-enter for new lines.
             questionField.addEventListener("keydown", (event) => {
                 if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
                     event.preventDefault()
@@ -242,8 +249,10 @@
         </script>
         {% endif %}
         <script>
+            // load a placement summary when its disclosure is opened.
             document.querySelectorAll(".placement-toggle").forEach((toggle) => {
-                toggle.addEventListener("click", async () => {
+            // open the panel and fetch its summary if it is not cached.
+            toggle.addEventListener("click", async () => {
                     const panel = toggle.nextElementSibling;
                     const willOpen = toggle.getAttribute("aria-expanded") !== "true"
                     toggle.setAttribute("aria-expanded", String(willOpen))

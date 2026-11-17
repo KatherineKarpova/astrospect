@@ -27,6 +27,7 @@ if (geoapifyKey && typeof autocomplete !== "undefined") {
     document.getElementById("birthplace-manual").hidden = false;
 }
 
+// clear the selected place details before the user changes locations.
 function clearBirthplace() {
     console.log("Clearing location");
     document.getElementById("birthplace").value = "";
@@ -36,6 +37,7 @@ function clearBirthplace() {
     document.getElementById("birth-timezone").value = "";
 }
 
+// save the verified location details selected from autocomplete.
 birthplaceAutocomplete?.on("select", function (location) {
     console.log("Select event received:", location);
     clearBirthplace();
@@ -73,6 +75,7 @@ const manualBirthplace = document.getElementById("birthplace-manual");
 
 manualBirthplace.addEventListener("input", clearBirthplace);
 
+// check that the visible place matches its verified location metadata.
 function selectedBirthplaceMatches(inputValue) {
     const selectedName = document.getElementById("birthplace").value.trim();
     const locationId = document.getElementById("location-id").value.trim();
@@ -89,6 +92,7 @@ function selectedBirthplaceMatches(inputValue) {
     );
 }
 
+// pass an unmatched typed place to the server for lookup.
 birthChartForm.addEventListener("submit", () => {
     const locationInput = document.querySelector(
         "#birthplace-autocomplete .geoapify-autocomplete-input"

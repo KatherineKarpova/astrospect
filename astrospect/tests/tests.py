@@ -632,6 +632,7 @@ class ChartPagePlacementTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertTrue(form.cleaned_data["needs_location_lookup"])
 
+    # verify the selected methods and matching house labels appear on the page.
     @patch("astrospect.views.generate_chart_svg", return_value="<svg></svg>")
     @patch("astrospect.views.build_chart_context", return_value={
         "zodiac": "sidereal",
@@ -648,7 +649,14 @@ class ChartPagePlacementTests(TestCase):
             "house_topic": "partnerships and agreements",
             "essential_dignity": [],
         }],
-        "angles": [],
+        "angles": [{
+            "name": "Ascendant",
+            "sign": "Scorpio",
+            "degree": 12.5,
+            "house": 1,
+            "house_sign": "Scorpio",
+            "house_topic": "self, body, and approach",
+        }],
     })
     @patch("astrospect.views.calculate_birth_chart", return_value=object())
     def test_selected_methods_are_used_and_displayed(
@@ -692,7 +700,11 @@ class ChartPagePlacementTests(TestCase):
         )
         self.assertContains(response, "Sidereal (Lahiri)")
         self.assertContains(response, "Placidus")
-        self.assertContains(response, "Placidus house 7 · Taurus")
+        self.assertContains(
+            response,
+            "House 7 · Partnerships and agreements (Taurus)",
+        )
+        self.assertContains(response, "House 1 · Self, body, and approach (Scorpio)")
         self.assertContains(response, "Princess Diana Frances Spencer")
         self.assertContains(response, "19:45 BST")
         self.assertContains(
@@ -879,7 +891,10 @@ class ChartPagePlacementTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Sun in Virgo")
-        self.assertContains(response, "Whole-sign house 10 · Capricorn")
+        self.assertContains(
+            response,
+            "House 10 · Work, responsibility, and public role (Capricorn)",
+        )
         self.assertContains(response, "Exalted")
         self.assertContains(response, "1st House")
         self.assertContains(response, "Birth time received: 13:05")

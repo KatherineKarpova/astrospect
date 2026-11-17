@@ -41,9 +41,11 @@ class BirthChartForm(forms.Form):
         initial="whole_sign",
     )
 
+    # apply the default zodiac when an older form omits it.
     def clean_zodiac_system(self):
         return self.cleaned_data.get("zodiac_system") or "tropical"
 
+    # apply the default house system when an older form omits it.
     def clean_house_system(self):
         return self.cleaned_data.get("house_system") or "whole_sign"
 
@@ -60,6 +62,7 @@ class BirthChartForm(forms.Form):
 
         return timezone_name
 
+    # validate the birth date and birthplace metadata together.
     def clean(self):
         cleaned_data = super().clean()
 

@@ -13,8 +13,11 @@
         <header class="page-heading">
             <p class="eyebrow">Astrology as a psychological framework for introspection.</p>
             <h1>Explore your birth chart</h1>
-            <p>Explore your chart using the selected zodiac and house system, then reflect on its traditional symbolism.</p>
+            <p>Discover more about yourself through the selected zodiac and house system.<br>See what patterns resonate with you, and ask the chart guide at the bottom for more information to dive deep.</p>
         </header>
+        <button id="sample-chart" class="button-secondary sample-chart-button" type="button">
+            Try a sample chart
+        </button>
         <section class="form-card">
             <form action="{% url 'astrology:chart' %}" method="post">
                 {% csrf_token %}
@@ -121,7 +124,6 @@
                         </option>
                     </select>
                     <p class="field-hint">Only the selected house system determines house placements. Houses require a birth time and birthplace.</p>
-                    <p class="field-hint">Calculation reference: <a href="https://www.astro.com/swisseph/swephprg.htm" target="_blank" rel="noopener noreferrer">Swiss Ephemeris Programmer's Manual</a>. It documents calculation methods, not interpretive claims.</p>
                 </fieldset>
                 <p id="browser-cache-status" class="field-hint" aria-live="polite"></p>
                 <button id="restore-saved-chart" class="button-secondary" type="button" hidden>
@@ -130,10 +132,9 @@
                 <button id="clear-saved-chart" class="button-secondary" type="button" hidden>
                     Clear chart saved in this browser
                 </button>
-                <button id="sample-chart" class="button-secondary sample-chart-button" type="button">
-                    Try a sample chart
-                </button>
-                <button type="submit">Generate my birth chart</button>
+                <div class="generate-chart-actions">
+                    <button class="generate-chart-button" type="submit">Generate my birth chart</button>
+                </div>
             </form>
         </div>
         <script src="https://unpkg.com/@geoapify/geocoder-autocomplete@3/dist/index.min.js"></script>
@@ -142,6 +143,7 @@
 
         <script src="{% static 'astrospect/script.js' %}"></script>
         <script>
+            // manage optional browser storage and sample chart submission.
             (() => {
                 const cacheKey = "vedic-chart-form-v1";
                 const form = document.querySelector("form[action]");
@@ -159,6 +161,7 @@
                             cachedDetails
                             && typeof cachedDetails === "object"
                             && ["birth_month", "birth_day", "birth_year"].every(
+                                // require the core birth-date fields before restoring.
                                 (field) => typeof cachedDetails[field] === "string"
                             )
                         ) {
@@ -200,10 +203,12 @@
                     form.requestSubmit()
                 })
 
+                // save entered chart details only when browser storage is enabled.
                 form.addEventListener("submit", () => {
                     if (!saveOption.checked) return;
                     const data = new FormData(form);
                     const details = {};
+                    // limit browser storage to these birth details and chart methods.
                     for (const field of [
                         "name", "birth_month", "birth_day", "birth_year",
                         "birth_time", "birthplace", "location_id", "latitude",
@@ -219,6 +224,7 @@
                     }
                 });
 
+                // restore saved fields and submit them through normal validation.
                 restoreButton.addEventListener("click", () => {
                     if (!cachedDetails) return;
                     for (const [field, value] of Object.entries(cachedDetails)) {
@@ -233,6 +239,7 @@
                     form.requestSubmit();
                 });
 
+                // remove saved chart details and update the status message.
                 document.getElementById("clear-saved-chart").addEventListener("click", () => {
                     try {
                         localStorage.removeItem(cacheKey);

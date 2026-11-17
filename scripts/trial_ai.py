@@ -12,6 +12,7 @@ client = OpenAI(
 PROMPT = "In three sentences, explain what a Sun sign is in astrology."
 
 
+# send one prompt with the chosen options and print a short result summary.
 def trial(label, max_tokens=1500, **extra):
     start = time.time()
     try:
