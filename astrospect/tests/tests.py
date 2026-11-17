@@ -666,7 +666,7 @@ class ChartPagePlacementTests(TestCase):
         render_svg,
     ):
         response = self.client.post("/chart/", {
-            "name": "Princess Diana Frances Spencer",
+            "name": "Princess Diana",
             "birth_month": "7",
             "birth_day": "1",
             "birth_year": "1961",
@@ -705,7 +705,7 @@ class ChartPagePlacementTests(TestCase):
             "House 7 · Partnerships and agreements (Taurus)",
         )
         self.assertContains(response, "House 1 · Self, body, and approach (Scorpio)")
-        self.assertContains(response, "Princess Diana Frances Spencer")
+        self.assertContains(response, "Princess Diana")
         self.assertContains(response, "19:45 BST")
         self.assertContains(
             response,
