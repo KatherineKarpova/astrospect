@@ -1,14 +1,16 @@
 import re
 import hashlib
 import json
+import secrets
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
-from django.http import Http404
+from django.http import Http404, HttpResponseNotAllowed
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 from .models import SavedChart
 from .forms import BirthChartForm
@@ -177,7 +179,12 @@ def active_chart(request):
             saved_chart = SavedChart.objects.get(pk=saved_chart_id)
         except SavedChart.DoesNotExist:
             return None, None
-        return saved_chart, saved_chart.chart_context
+        chart_context = {
+            key: value
+            for key, value in saved_chart.chart_context.items()
+            if key != "chart_name"
+        }
+        return saved_chart, chart_context
     return None, request.session.get("chart_context")
 
 
@@ -188,7 +195,7 @@ def index(request):
         'geoapify_api_key': settings.GEOAPIFY_API_KEY,
         })
 
-# validate chart input, calculate placements, and render the result.
+# calculate a posted chart once, then render the session result on get.
 def chart(request):
     if request.method == 'POST':
         form = BirthChartForm(request.POST)
@@ -240,18 +247,36 @@ def chart(request):
                     tzinfo=ZoneInfo(timezone_name)
                 ).strftime("%H:%M %Z")
             request.session["chart_context"] = chart_context
+            request.session["has_birth_time"] = has_birth_time
             chart_svg = generate_chart_svg(
                 chart,
                 show_houses=has_birth_time and has_birth_location,
             )
+            request.session["chart_name"] = data.get("name") or "Your Birth Chart"
             request.session.pop("saved_chart_id", None)
             request.session["chart_svg"] = chart_svg
-            request.session["browser_cache_enabled"] = (
-                request.POST.get("save_to_browser") == "on"
-            )
+            request.session["browser_cache_enabled"] = data["save_to_browser"]
             request.session.pop("chat_history", None)
             request.session.pop("placement_summaries", None)
             request.session.pop("placement_summary_version", None)
+            return redirect("astrology:chart")
+        return render(
+            request,
+            "astrospect/index.html",
+            {
+                "form": form,
+                "geoapify_api_key": settings.GEOAPIFY_API_KEY,
+            },
+        )
+
+    if request.method in ("GET", "HEAD"):
+        chart_context = request.session.get("chart_context")
+        chart_svg = request.session.get("chart_svg")
+        if chart_context and chart_svg:
+            has_birth_time = request.session.get(
+                "has_birth_time",
+                chart_context.get("birth_time_known", False),
+            )
             response = render(
                 request,
                 "astrospect/chart.html",
@@ -261,10 +286,14 @@ def chart(request):
                         chart_svg,
                         has_birth_time,
                     ),
-                    "chart_name": data.get("name") or "Your Birth Chart",
-                    "browser_cache_enabled": request.session[
-                        "browser_cache_enabled"
-                    ],
+                    "chart_name": request.session.get(
+                        "chart_name",
+                        "Your Birth Chart",
+                    ),
+                    "browser_cache_enabled": request.session.get(
+                        "browser_cache_enabled",
+                        False,
+                    ),
                     "chart_cache_key": hashlib.sha256(
                         json.dumps(
                             chart_context,
@@ -279,22 +308,69 @@ def chart(request):
             response["Referrer-Policy"] = "no-referrer"
             response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
             return response
+
         return render(
             request,
             "astrospect/index.html",
             {
-                "form": form,
+                "form": BirthChartForm(),
                 "geoapify_api_key": settings.GEOAPIFY_API_KEY,
+                "auto_restore_chart": True,
             },
         )
-    else: 
-        form = BirthChartForm()
-        # display the form for a get request, or redisplay it with
-        # validation errors after an unsuccessful submission
-        return render(request, 'astrospect/index.html',{
-            'form': form,
-            'geoapify_api_key': settings.GEOAPIFY_API_KEY,
-            })
+
+    return HttpResponseNotAllowed(["GET", "HEAD", "POST"])
+
+
+# save the active session chart and return its private link.
+def save_chart(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required."}, status=405)
+
+    if request.session.get("saved_chart_id"):
+        return JsonResponse({"error": "This chart already has a private link."}, status=400)
+
+    chart_context = request.session.get("chart_context")
+    chart_svg = request.session.get("chart_svg")
+    if not chart_context or not chart_svg:
+        return JsonResponse({"error": "Generate a chart before saving it."}, status=400)
+
+    token = secrets.token_urlsafe(32)
+    # keep only a digest in postgres; the raw token is returned once in the link.
+    token_digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+    stored_context = dict(chart_context)
+    chart_name = request.POST.get("chart_name", "").strip()[:100]
+    if chart_name:
+        stored_context["chart_name"] = chart_name
+
+    placement_summaries = request.session.get("placement_summaries", {})
+    if request.session.get("placement_summary_version") != PLACEMENT_SUMMARY_VERSION:
+        placement_summaries = {}
+    if not isinstance(placement_summaries, dict):
+        return JsonResponse({"error": "Chart summaries could not be saved."}, status=500)
+
+    saved_chart = SavedChart.objects.create(
+        token_digest=token_digest,
+        chart_context=stored_context,
+        chart_svg=chart_svg,
+        has_birth_time=chart_context.get("birth_time_known", False),
+        placement_summaries=placement_summaries,
+        placement_summary_version=PLACEMENT_SUMMARY_VERSION,
+    )
+    request.session["saved_chart_id"] = saved_chart.pk
+    private_url = request.build_absolute_uri(
+        reverse("astrology:saved_chart", kwargs={"token": token})
+    )
+    delete_url = request.build_absolute_uri(
+        reverse("astrology:delete_saved_chart", kwargs={"token": token})
+    )
+    response = JsonResponse({
+        "url": private_url,
+        "delete_url": delete_url,
+    })
+    response["Cache-Control"] = "private, no-store"
+    response["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 # load a private chart using its unguessable access token.
@@ -312,6 +388,16 @@ def saved_chart(request, token):
                     chart.chart_context,
                     chart.chart_svg,
                     chart.has_birth_time,
+                ),
+                "chart_name": chart.chart_context.get(
+                    "chart_name",
+                    "Your Birth Chart",
+                ),
+                "private_chart_url": request.build_absolute_uri(
+                    reverse("astrology:saved_chart", kwargs={"token": token})
+                ),
+                "private_chart_delete_url": request.build_absolute_uri(
+                    reverse("astrology:delete_saved_chart", kwargs={"token": token})
                 ),
                 "chart_cache_key": hashlib.sha256(
                     json.dumps(

@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 # validate the data from the submitted birth chart generation form
 class BirthChartForm(forms.Form):
     name = forms.CharField(max_length=100, required=False)
+    # enable browser saving by default while allowing users to opt out.
+    save_to_browser = forms.BooleanField(required=False, initial=True)
 
     birth_month = forms.IntegerField(min_value=1, max_value=12)
     birth_day = forms.IntegerField(min_value=1, max_value=31)

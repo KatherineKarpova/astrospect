@@ -17,7 +17,8 @@
             <header class="page-heading">
                 <p class="eyebrow">{{ chart_zodiac_label }} · {{ chart_house_system_label }} chart</p>
                 <h1>{{ chart_name|default:"Your Birth Chart" }}</h1>
-                <p>Tap a placement and see what it might spark for you. Think of astrology as a fun lens for self-reflection, not science or fact.</p>
+                <p>Tap a placement and see what it might spark for you.</p>
+                <p>Think of astrology as a lens for self-reflection, not science or fact.</p>
                 {% if chat_enabled %}<a class="text-link" href="#chart-guide">Curious what else your chart might bring up? Ask the chart guide ↓</a>{% endif %}
             </header>
 
@@ -112,9 +113,89 @@
                 </section>
             {% endif %}
 
+            <section class="private-chart-note">
+                <p class="eyebrow">{% if private_chart_url %}Private chart link{% else %}Save this chart{% endif %}</p>
+                <p>Anyone with this private link can view this saved chart. Only share it with people you trust.</p>
+                <form id="save-chart-form" action="{% url 'astrology:save_chart' %}" method="post"
+                    {% if private_chart_url %}hidden{% endif %}>
+                    {% csrf_token %}
+                    <input type="hidden" name="chart_name" value="{{ chart_name|default:'Your Birth Chart' }}">
+                    <button class="button-primary" type="submit">Save chart</button>
+                </form>
+                <div id="private-chart-link" {% if not private_chart_url %}hidden{% endif %}>
+                    <label for="private-chart-url">Private link</label>
+                    <div class="private-chart-link">
+                        <input id="private-chart-url" type="url" value="{{ private_chart_url }}" readonly>
+                        <button id="copy-private-chart-link" class="button-secondary" type="button">Copy link</button>
+                    </div>
+                    <form id="delete-saved-chart-form" method="post"
+                        action="{{ private_chart_delete_url }}"
+                        {% if not private_chart_url %}hidden{% endif %}>
+                        {% csrf_token %}
+                        <button class="button-secondary" type="submit">Delete saved chart</button>
+                    </form>
+                </div>
+                <p id="private-chart-status" class="field-hint" role="status" aria-live="polite"></p>
+            </section>
+
             <a class="text-link" href="{% url 'astrology:index' %}">
                 Calculate another chart
             </a>
+
+            <script>
+                // save the current chart and reveal its private link.
+                const saveChartForm = document.getElementById("save-chart-form")
+                const privateChartLink = document.getElementById("private-chart-link")
+                const privateChartUrl = document.getElementById("private-chart-url")
+                const deleteSavedChartForm = document.getElementById("delete-saved-chart-form")
+                const privateChartStatus = document.getElementById("private-chart-status")
+
+                saveChartForm.addEventListener("submit", async (event) => {
+                    event.preventDefault()
+                    const button = saveChartForm.querySelector("button")
+                    button.disabled = true
+                    privateChartStatus.textContent = "Saving your chart..."
+                    try {
+                        const response = await fetch(saveChartForm.action, {
+                            method: "POST",
+                            body: new FormData(saveChartForm)
+                        })
+                        const result = await response.json()
+                        if (!response.ok) {
+                            throw new Error(result.error || "Your chart could not be saved.")
+                        }
+                        privateChartUrl.value = result.url
+                        deleteSavedChartForm.action = result.delete_url
+                        privateChartLink.hidden = false
+                        deleteSavedChartForm.hidden = false
+                        saveChartForm.hidden = true
+                        privateChartStatus.textContent = "Your private chart link is ready."
+                    } catch (error) {
+                        privateChartStatus.textContent = error.message
+                    } finally {
+                        button.disabled = false
+                    }
+                })
+
+                // copy the private link or select it for manual copying.
+                document.getElementById("copy-private-chart-link").addEventListener(
+                    "click",
+                    async () => {
+                        privateChartUrl.select()
+                        try {
+                            if (navigator.clipboard && window.isSecureContext) {
+                                await navigator.clipboard.writeText(privateChartUrl.value)
+                            } else if (!document.execCommand("copy")) {
+                                throw new Error("Copy failed")
+                            }
+                            privateChartStatus.textContent = "Private link copied."
+                        } catch (error) {
+                            privateChartStatus.textContent =
+                                "Select the link above and copy it to share your chart."
+                        }
+                    }
+                )
+            </script>
 
             <form id="summary-csrf-form" hidden>{% csrf_token %}</form>
             {{ chart_cache_key|json_script:"chart-cache-key" }}
@@ -126,7 +207,8 @@
                     const cacheEnabled = {{ browser_cache_enabled|yesno:"true,false" }};
                     if (cacheEnabled) {
                         // clear both saved form details and their chart summaries.
-                        document.getElementById("clear-browser-chart")?.addEventListener("click", () => {
+                        document.addEventListener("click", (event) => {
+                            if (!event.target.closest("#clear-browser-chart")) return;
                             try {
                                 localStorage.removeItem("vedic-chart-form-v1");
                                 localStorage.removeItem(key);

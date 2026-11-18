@@ -340,6 +340,12 @@ button:disabled {
     margin-top: 0.75rem;
 }
 
+.private-chart-link input {
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+}
+
 .private-chart-link a {
     min-width: 0;
     overflow-wrap: anywhere;

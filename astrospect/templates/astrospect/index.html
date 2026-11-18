@@ -94,10 +94,11 @@
                     With a selected birthplace, this is interpreted as local time. Without one, it is treated as a UTC approximation for planetary positions only; houses and angles are omitted.
                 </p>
                 <label class="browser-cache-option" for="save-to-browser">
-                    <input type="checkbox" id="save-to-browser" name="save_to_browser">
+                    <input type="checkbox" id="save-to-browser" name="save_to_browser"
+                        {% if form.save_to_browser.value or not form.is_bound %}checked{% endif %}>
                     Save my chart details in this browser
                 </label>
-                <p class="field-hint">This stores the birth details on this device only, so you can restore the chart in this browser. Do not select this on a shared device.</p>
+                <p class="field-hint">Selected by default to save your details on this device. Uncheck it to skip saving, or clear saved details here when you return to this form. Uncheck it on a shared device.</p>
                 <fieldset class="chart-method-fields">
                     <legend>Chart methods</legend>
                     <label for="zodiac-system">Zodiac</label>
@@ -151,6 +152,7 @@
                 const restoreButton = document.getElementById("restore-saved-chart");
                 const status = document.getElementById("browser-cache-status");
                 const sampleButton = document.getElementById("sample-chart");
+                const autoRestoreChart = {{ auto_restore_chart|yesno:"true,false" }};
                 let cachedDetails = null;
 
                 try {
@@ -220,12 +222,13 @@
                         localStorage.setItem(cacheKey, JSON.stringify(details));
                         status.textContent = "This chart will be available to restore in this browser.";
                     } catch (error) {
+                        saveOption.checked = false;
                         status.textContent = "Could not save chart details in this browser.";
                     }
                 });
 
                 // restore saved fields and submit them through normal validation.
-                restoreButton.addEventListener("click", () => {
+                const restoreSavedChart = () => {
                     if (!cachedDetails) return;
                     for (const [field, value] of Object.entries(cachedDetails)) {
                         const input = form.elements.namedItem(field);
@@ -237,7 +240,8 @@
                     if (locationInput) locationInput.value = cachedDetails.birthplace;
                     saveOption.checked = true;
                     form.requestSubmit();
-                });
+                };
+                restoreButton.addEventListener("click", restoreSavedChart);
 
                 // remove saved chart details and update the status message.
                 document.getElementById("clear-saved-chart").addEventListener("click", () => {
@@ -251,6 +255,8 @@
                         status.textContent = "Could not clear saved chart details from this browser.";
                     }
                 });
+
+                if (autoRestoreChart && cachedDetails) restoreSavedChart();
             })();
         </script>
     </body>

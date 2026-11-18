@@ -4,8 +4,9 @@ import secrets
 from datetime import date, time
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlsplit
 
-from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
+from django.test import Client, RequestFactory, SimpleTestCase, TestCase, override_settings
 
 from astrospect.chatbot import (
     SOURCES,
@@ -138,6 +139,7 @@ class PlacementSummaryViewTests(TestCase):
             ],
             "angles": [],
         }
+        session["chart_svg"] = "<svg>chart</svg>"
         session.save()
 
     def test_returns_ai_summary_for_chart_placement(self):
@@ -174,26 +176,59 @@ class PlacementSummaryViewTests(TestCase):
         generate.assert_called_once()
 
     def test_saved_chart_link_loads_chart_without_prior_browser_session(self):
-        token = secrets.token_urlsafe(32)
-        chart = SavedChart.objects.create(
-            token_digest=hashlib.sha256(token.encode("ascii")).hexdigest(),
-            chart_context=self.client.session["chart_context"],
-            chart_svg="<svg>chart</svg>",
-            has_birth_time=True,
+        save_response = self.client.post(
+            "/chart/save/",
+            {"chart_name": "Test Chart"},
         )
+        token = urlsplit(save_response.json()["url"]).path.strip("/").split("/")[-1]
+        chart = SavedChart.objects.get(
+            token_digest=hashlib.sha256(token.encode("ascii")).hexdigest(),
+        )
+        another_browser = Client()
 
-        response = self.client.get(f"/saved/{token}/")
+        response = another_browser.get(urlsplit(save_response.json()["url"]).path)
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Sun in Virgo")
+        self.assertContains(response, "Test Chart")
+        self.assertContains(response, save_response.json()["url"])
+        self.assertContains(response, "Copy link")
+        self.assertContains(response, "Anyone with this private link can view this saved chart.")
         self.assertNotContains(response, "No special sign condition")
-        self.assertEqual(self.client.session["saved_chart_id"], chart.pk)
+        self.assertEqual(another_browser.session["saved_chart_id"], chart.pk)
         self.assertEqual(response["Cache-Control"], "private, no-store")
         self.assertEqual(response["Referrer-Policy"], "no-referrer")
         self.assertEqual(
             response["X-Robots-Tag"],
             "noindex, nofollow, noarchive",
         )
+
+    def test_saving_chart_stores_only_token_digest_and_available_summaries(self):
+        token = secrets.token_urlsafe(32)
+        summary = {"summary": "A saved placement summary.", "sources": []}
+        session = self.client.session
+        session["placement_summaries"] = {"sun": summary}
+        session["placement_summary_version"] = PLACEMENT_SUMMARY_VERSION
+        session.save()
+
+        with patch("astrospect.views.secrets.token_urlsafe", return_value=token) as generate_token:
+            response = self.client.post(
+                "/chart/save/",
+                {"chart_name": "Test Chart"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        generate_token.assert_called_once_with(32)
+        saved = SavedChart.objects.get()
+        self.assertEqual(
+            saved.token_digest,
+            hashlib.sha256(token.encode("ascii")).hexdigest(),
+        )
+        self.assertNotIn(token, saved.token_digest)
+        self.assertEqual(saved.chart_svg, "<svg>chart</svg>")
+        self.assertEqual(saved.placement_summaries, {"sun": summary})
+        self.assertEqual(response.json()["url"], f"http://testserver/saved/{token}/")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
 
     def test_saved_chart_summary_is_cached_in_database(self):
         token = secrets.token_urlsafe(32)
@@ -219,12 +254,10 @@ class PlacementSummaryViewTests(TestCase):
         self.assertEqual(chart.placement_summaries["sun"], result)
 
     def test_private_link_can_delete_its_saved_chart(self):
-        token = secrets.token_urlsafe(32)
-        chart = SavedChart.objects.create(
+        save_response = self.client.post("/chart/save/", {"chart_name": "Test Chart"})
+        token = urlsplit(save_response.json()["url"]).path.strip("/").split("/")[-1]
+        chart = SavedChart.objects.get(
             token_digest=hashlib.sha256(token.encode("ascii")).hexdigest(),
-            chart_context=self.client.session["chart_context"],
-            chart_svg="<svg>chart</svg>",
-            has_birth_time=True,
         )
 
         response = self.client.post(f"/saved/{token}/delete/")
@@ -678,7 +711,7 @@ class ChartPagePlacementTests(TestCase):
             "birth_timezone": "Europe/London",
             "zodiac_system": "sidereal",
             "house_system": "placidus",
-        })
+        }, follow=True)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -758,7 +791,7 @@ class ChartPagePlacementTests(TestCase):
             "longitude": "",
             "birth_timezone": "",
             "birth_time": "13:05",
-        })
+        }, follow=True)
         self.assertEqual(response.status_code, 200)
         resolve.assert_called_once_with("Miami, Florida")
         self.assertTrue(build_context.call_args.args[2])
@@ -793,9 +826,10 @@ class ChartPagePlacementTests(TestCase):
             patch("astrospect.views.build_chart_context", return_value=context) as build_context,
             patch("astrospect.views.generate_chart_svg", return_value="<svg></svg>") as render_svg,
         ):
-            response = self.client.post("/chart/", post_data)
+            response = self.client.post("/chart/", post_data, follow=True)
 
         self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["browser_cache_enabled"])
         sign_changes.assert_called_once()
         calculate_chart.assert_called_once()
         self.assertEqual(calculate_chart.call_args.args[1], "UTC")
@@ -911,7 +945,7 @@ class ChartPagePlacementTests(TestCase):
         return_value={"planets": [], "angles": [], "birth_location_known": False},
     )
     @patch("astrospect.views.calculate_birth_chart", return_value=object())
-    def test_browser_cache_is_opt_in_and_chart_is_not_stored_in_saved_chart_table(
+    def test_browser_cache_is_saved_when_checked_without_creating_private_chart(
         self,
         calculate_chart,
         build_context,
@@ -926,11 +960,110 @@ class ChartPagePlacementTests(TestCase):
                 "birth_time": "",
                 "save_to_browser": "on",
             },
+            follow=True,
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["browser_cache_enabled"])
         self.assertFalse(SavedChart.objects.exists())
         self.assertContains(response, "Saved in this browser")
+
+    def test_chart_post_redirects_and_get_preserves_session_chart_state(self):
+        context = {
+            "birth_location_known": False,
+            "birth_time_known": True,
+            "planets": [],
+            "angles": [],
+        }
+        post_data = {
+            "birth_month": "9",
+            "birth_day": "22",
+            "birth_year": "1997",
+            "birthplace": "",
+            "location_id": "",
+            "latitude": "",
+            "longitude": "",
+            "birth_timezone": "",
+            "birth_time": "13:05",
+        }
+
+        with (
+            patch("astrospect.views.calculate_daily_sign_changes", return_value={}),
+            patch("astrospect.views.calculate_birth_chart", return_value=object()) as calculate_chart,
+            patch("astrospect.views.build_chart_context", return_value=context),
+            patch("astrospect.views.generate_chart_svg", return_value="<svg>chart</svg>"),
+        ):
+            post_response = self.client.post("/chart/", post_data)
+            self.assertEqual(post_response.status_code, 302)
+            self.assertEqual(post_response["Location"], "/chart/")
+            calculate_chart.assert_called_once()
+
+            session = self.client.session
+            session["chat_history"] = [{"role": "user", "content": "keep this"}]
+            session["placement_summaries"] = {"sun": {"summary": "keep this"}}
+            session["placement_summary_version"] = PLACEMENT_SUMMARY_VERSION
+            session.save()
+
+            chart_response = self.client.get("/chart/")
+            self.assertEqual(chart_response.status_code, 200)
+            self.assertContains(chart_response, "<svg>chart</svg>")
+            refresh_response = self.client.get("/chart/")
+            self.assertEqual(refresh_response.status_code, 200)
+            self.assertContains(refresh_response, "<svg>chart</svg>")
+            calculate_chart.assert_called_once()
+
+        session = self.client.session
+        self.assertEqual(
+            session["chat_history"],
+            [{"role": "user", "content": "keep this"}],
+        )
+        self.assertEqual(
+            session["placement_summaries"],
+            {"sun": {"summary": "keep this"}},
+        )
+        self.assertEqual(
+            session["placement_summary_version"],
+            PLACEMENT_SUMMARY_VERSION,
+        )
+
+    def test_chart_route_offers_automatic_browser_restore_but_form_stays_editable(self):
+        chart_response = self.client.get("/chart/")
+        form_response = self.client.get("/")
+
+        self.assertEqual(chart_response.status_code, 200)
+        self.assertTrue(chart_response.context["auto_restore_chart"])
+        self.assertEqual(form_response.status_code, 200)
+        self.assertFalse(form_response.context.get("auto_restore_chart", False))
+
+    def test_browser_clear_handler_removes_details_used_by_auto_restore(self):
+        session = self.client.session
+        session["chart_context"] = {
+            "birth_location_known": False,
+            "birth_time_known": False,
+            "planets": [],
+            "angles": [],
+        }
+        session["chart_svg"] = "<svg></svg>"
+        session["browser_cache_enabled"] = True
+        session.save()
+
+        chart_response = self.client.get("/chart/")
+        self.assertContains(chart_response, "Clear saved chart from this browser")
+        self.assertContains(
+            chart_response,
+            'event.target.closest("#clear-browser-chart")',
+        )
+        self.assertContains(
+            chart_response,
+            'localStorage.removeItem("vedic-chart-form-v1")',
+        )
+
+        form_response = self.client.get("/")
+        self.assertContains(form_response, "localStorage.removeItem(cacheKey)")
+        self.assertContains(form_response, "cachedDetails = null")
+        self.assertContains(
+            form_response,
+            "if (autoRestoreChart && cachedDetails) restoreSavedChart();",
+        )
 
     def test_planet_house_note_is_not_repeated_on_each_placement(self):
         from astrospect.views import chart_display_context
@@ -955,7 +1088,26 @@ class ChartPagePlacementTests(TestCase):
         )
         self.assertEqual(context["planet_placements"][0]["house_brief"], "")
 
-    def test_chart_form_explains_opt_in_browser_cache(self):
+    def test_chart_form_defaults_browser_cache_to_enabled_and_offers_clear(self):
         response = self.client.get("/")
         self.assertContains(response, "Save my chart details in this browser")
+        self.assertRegex(
+            response.content.decode(),
+            r'id="save-to-browser" name="save_to_browser"[^>]*checked',
+        )
         self.assertContains(response, "Restore chart saved in this browser")
+        self.assertContains(response, "Clear chart saved in this browser")
+
+    def test_unchecked_browser_cache_choice_is_preserved_when_form_is_invalid(self):
+        response = self.client.post("/chart/", {
+            "birth_month": "2",
+            "birth_day": "30",
+            "birth_year": "1997",
+            "save_to_browser": "",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotRegex(
+            response.content.decode(),
+            r'id="save-to-browser" name="save_to_browser"[^>]*checked',
+        )
