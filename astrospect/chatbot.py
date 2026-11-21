@@ -375,7 +375,12 @@ def clean_chat_text(text):
         text,
         flags=re.IGNORECASE,
     )
-    return text.strip()
+    text = text.strip()
+    return re.sub(
+        r"(^|[.!?]\s+|\n+)([a-z])",
+        lambda match: match.group(1) + match.group(2).upper(),
+        text,
+    )
 
 
 # convert calculated placements into facts for summaries and chart guidance.
