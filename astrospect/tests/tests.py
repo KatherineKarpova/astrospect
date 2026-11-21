@@ -99,7 +99,9 @@ class AIProviderTests(SimpleTestCase):
         client = MagicMock()
         client.chat.completions.create.return_value.choices = [
             MagicMock(message=MagicMock(content=(
-                '{"answer":"A chart-based answer.","reflection":"What resonates?",'
+                '{"answer":"A **chart-based** answer. [source: BPHS] [source: ] '
+                '[BPHS] [1] (BPHS) [Brihat Parashara Hora Shastra]",'
+                '"reflection":"What resonates **here**?",'
                 '"source_ids":["BPHS"]}'
             )))
         ]
@@ -117,6 +119,7 @@ class AIProviderTests(SimpleTestCase):
         self.assertEqual(request["model"], "test-model")
         self.assertNotIn("response_format", request)
         self.assertEqual(result["answer"], "A chart-based answer.")
+        self.assertEqual(result["reflection"], "What resonates here?")
 
 
 class PlacementSummaryViewTests(TestCase):

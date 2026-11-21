@@ -336,6 +336,8 @@ def ask_chart_guide(
     reply.setdefault("reflection", "")
     if not isinstance(reply["reflection"], str):
         reply["reflection"] = ""
+    reply["answer"] = clean_chat_text(reply["answer"])
+    reply["reflection"] = clean_chat_text(reply["reflection"])
     source_ids = reply.get("source_ids")
     if not isinstance(source_ids, list):
         source_ids = []
@@ -350,6 +352,31 @@ def ask_chart_guide(
     reply["sources"] = [approved_sources[s] for s in dict.fromkeys(source_ids)]
 
     return reply
+
+
+# remove inconsistent markdown and empty source markers from model text.
+def clean_chat_text(text):
+    text = text.strip().replace("**", "")
+    text = re.sub(r"\s*\[source:[^\]]*\]", "", text, flags=re.IGNORECASE)
+    source_labels = "|".join(
+        re.escape(label)
+        for source in SOURCES
+        for label in (source["id"], source["title"])
+    )
+    text = re.sub(
+        rf"\s*\[(?:{source_labels}|\d+)\]",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        rf"\s*\((?:{source_labels})\)",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return text.strip()
+
 
 # convert calculated placements into facts for summaries and chart guidance.
 def build_chart_context(
